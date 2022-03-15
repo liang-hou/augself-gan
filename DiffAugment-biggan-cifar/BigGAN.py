@@ -1,4 +1,4 @@
-from DiffAugment_pytorch import DiffAugment
+from DiffAugment_pytorch import DiffAugment, AUGMENT_DMS
 import numpy as np
 import math
 import functools
@@ -294,7 +294,7 @@ class Discriminator(nn.Module):
                  num_D_SVs=1, num_D_SV_itrs=1, D_activation=nn.ReLU(inplace=False),
                  D_lr=2e-4, D_B1=0.0, D_B2=0.999, adam_eps=1e-8,
                  SN_eps=1e-12, output_dim=1, D_mixed_precision=False, D_fp16=False,
-                 D_init='ortho', skip_init=False, D_param='SN', **kwargs):
+                 D_init='ortho', skip_init=False, D_param='SN', augself=None, **kwargs):
         super(Discriminator, self).__init__()
         # Width multiplier
         self.ch = D_ch
@@ -369,6 +369,13 @@ class Discriminator(nn.Module):
         # Embedding for projection discrimination
         self.embed = self.which_embedding(
             self.n_classes, self.arch['out_channels'][-1])
+        
+        self.augself = augself
+        if self.augself:
+            self.linear_augself = {}
+            for aug in self.augself.split(','):
+                self.linear_augself[aug] = self.which_linear(self.arch['out_channels'][-1], AUGMENT_DMS[aug])
+            self.linear_augself = nn.ModuleDict(self.linear_augself)
 
         # Initialize weights
         if not skip_init:
@@ -408,20 +415,35 @@ class Discriminator(nn.Module):
         print('Param count for D''s initialized parameters: %d' %
               self.param_count)
 
-    def forward(self, x, y=None):
+    def forward(self, x, x_o=None, x_t=None, y=None):
         # Stick x into h for cleaner for loops without flow control
         h = x
+        if x_o:
+            h_o = x_o
+        if x_t:
+            h_t = x_t
         # Loop over blocks
         for index, blocklist in enumerate(self.blocks):
             for block in blocklist:
                 h = block(h)
+                if x_o:
+                    h_o = block(h_o)
+                if x_t:
+                    h_t = block(h_t)
         # Apply global sum pooling as in SN-GAN
         h = torch.sum(self.activation(h), [2, 3])
+        if x_o:
+            h_o = torch.sum(self.activation(h_o), [2, 3])
+        if x_t:
+            h_t = torch.sum(self.activation(h_t), [2, 3])
         # Get initial class-unconditional output
         out = self.linear(h)
         # Get projection of final featureset onto class vectors and add to evidence
         out = out + torch.sum(self.embed(y) * h, 1, keepdim=True)
-        return out
+        out_augself = {}
+        for aug in self.augself.split(','):
+            out_augself[aug] = self.linear_augself[aug](h_t - h_o)
+        return out, out_augself
 
 
 # Parallelized G_D to minimize cross-gpu communication
@@ -434,7 +456,7 @@ class G_D(nn.Module):
         self.G = G
         self.D = D
 
-    def forward(self, z, gy, x=None, dy=None, train_G=False, return_G_z=False, policy=False, CR=False, CR_augment=None):
+    def forward(self, z, gy, x=None, dy=None, train_G=False, return_G_z=False, policy=False, CR=False, CR_augment=None, augself=None):
         if z is not None:
             # If training G, enable grad tape
             with torch.set_grad_enabled(train_G):
@@ -452,7 +474,12 @@ class G_D(nn.Module):
             [img for img in [G_z, x] if img is not None], 0)
         D_class = torch.cat(
             [label for label in [gy, dy] if label is not None], 0)
-        D_input = DiffAugment(D_input, policy=policy)
+        D_input_orig = D_input
+        D_input, _ = DiffAugment(D_input, policy=policy)
+        if self.D.augself:
+            D_input_augself, D_gt_augself = DiffAugment(D_input_orig, policy=self.D.augself)
+        else:
+            D_input_orig, D_input_augself = None, None
         if CR:
             if CR_augment:
                 x_CR_aug = torch.split(D_input, [G_z.shape[0], x.shape[0]])[1]
@@ -465,16 +492,16 @@ class G_D(nn.Module):
                 D_input = torch.cat([D_input, x], 0)
             D_class = torch.cat([D_class, dy], 0)
         # Get Discriminator output
-        D_out = self.D(D_input, D_class)
+        D_out, D_out_augself = self.D(D_input, D_input_orig, D_input_augself, D_class)
         if G_z is None:
             return D_out
         elif x is not None:
             if CR:
                 return torch.split(D_out, [G_z.shape[0], x.shape[0], x.shape[0]])
             else:
-                return torch.split(D_out, [G_z.shape[0], x.shape[0]])
+                return torch.split(D_out, [G_z.shape[0], x.shape[0]]), D_out_augself, D_gt_augself
         else:
             if return_G_z:
                 return D_out, G_z
             else:
-                return D_out
+                return D_out, D_out_augself, D_gt_augself
