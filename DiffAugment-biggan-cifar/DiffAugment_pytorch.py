@@ -77,45 +77,14 @@ def rand_cutout(x, ratio=0.5):
     return x, torch.cat([offset_x.view(-1, 1).float() / (x.size(2) - cutout_size[0] % 2), offset_y.view(-1, 1).float() / (x.size(3) - cutout_size[1] % 2)], 1)
 
 
-def rand_rotation(x):
-    degree = torch.randint(0, 4, size=[x.size(0),1,1,1], device=x.device)
-    x = torch.where(degree == 1, x.transpose(2, 3).flip(3), x)
-    x = torch.where(degree == 2, x.flip(2).flip(3), x)
-    x = torch.where(degree == 3, x.transpose(2, 3).flip(2), x)
-    return x, degree.view(-1, 1)
-
-
-def rand_permutation(x):
-    permutation = torch.randint(0, 6, size=[x.size(0),1,1,1], device=x.device)
-    r, g, b = torch.split(x, 1, 1)
-    x = torch.where(permutation == 1, torch.cat([r, b, g], 1), x)
-    x = torch.where(permutation == 2, torch.cat([g, r, b], 1), x)
-    x = torch.where(permutation == 3, torch.cat([g, b, r], 1), x)
-    x = torch.where(permutation == 4, torch.cat([b, r, g], 1), x)
-    x = torch.where(permutation == 5, torch.cat([b, g, r], 1), x)
-    return x, permutation.view(-1, 1)
-
-
 AUGMENT_FNS = {
     'color': [rand_brightness, rand_saturation, rand_contrast],
     'translation': [rand_translation],
     'cutout': [rand_cutout],
-    'rotation': [rand_rotation],
-    'permutation': [rand_permutation],
-}
-
-AUGMENT_TPS = {
-    'color': 'regression',
-    'translation': 'regression',
-    'cutout': 'regression',
-    'rotation': 'classification',
-    'permutation': 'classification',
 }
 
 AUGMENT_DMS = {
     'color': 3,
     'translation': 2,
     'cutout': 2,
-    'rotation': 4 * 2,
-    'permutation': 6 * 2,
 }

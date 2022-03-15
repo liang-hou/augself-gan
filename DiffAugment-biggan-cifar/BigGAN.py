@@ -415,34 +415,25 @@ class Discriminator(nn.Module):
         print('Param count for D''s initialized parameters: %d' %
               self.param_count)
 
-    def forward(self, x, x_o=None, x_t=None, y=None):
+    def forward(self, x, x_o=None, y=None):
         # Stick x into h for cleaner for loops without flow control
         h = x
-        if x_o:
-            h_o = x_o
-        if x_t:
-            h_t = x_t
+        h_o = x_o
         # Loop over blocks
         for index, blocklist in enumerate(self.blocks):
             for block in blocklist:
                 h = block(h)
-                if x_o:
-                    h_o = block(h_o)
-                if x_t:
-                    h_t = block(h_t)
+                h_o = block(h_o)
         # Apply global sum pooling as in SN-GAN
         h = torch.sum(self.activation(h), [2, 3])
-        if x_o:
-            h_o = torch.sum(self.activation(h_o), [2, 3])
-        if x_t:
-            h_t = torch.sum(self.activation(h_t), [2, 3])
+        h_o = torch.sum(self.activation(h_o), [2, 3])
         # Get initial class-unconditional output
         out = self.linear(h)
         # Get projection of final featureset onto class vectors and add to evidence
         out = out + torch.sum(self.embed(y) * h, 1, keepdim=True)
         out_augself = {}
         for aug in self.augself.split(','):
-            out_augself[aug] = self.linear_augself[aug](h_t - h_o)
+            out_augself[aug] = self.linear_augself[aug](h - h_o)
         return out, out_augself
 
 
@@ -456,7 +447,7 @@ class G_D(nn.Module):
         self.G = G
         self.D = D
 
-    def forward(self, z, gy, x=None, dy=None, train_G=False, return_G_z=False, policy=False, CR=False, CR_augment=None, augself=None):
+    def forward(self, z, gy, x=None, dy=None, train_G=False, return_G_z=False, policy=False, CR=False, CR_augment=None):
         if z is not None:
             # If training G, enable grad tape
             with torch.set_grad_enabled(train_G):
@@ -475,11 +466,7 @@ class G_D(nn.Module):
         D_class = torch.cat(
             [label for label in [gy, dy] if label is not None], 0)
         D_input_orig = D_input
-        D_input, _ = DiffAugment(D_input, policy=policy)
-        if self.D.augself:
-            D_input_augself, D_gt_augself = DiffAugment(D_input_orig, policy=self.D.augself)
-        else:
-            D_input_orig, D_input_augself = None, None
+        D_input, D_gts_augself = DiffAugment(D_input, policy=policy)
         if CR:
             if CR_augment:
                 x_CR_aug = torch.split(D_input, [G_z.shape[0], x.shape[0]])[1]
@@ -492,16 +479,16 @@ class G_D(nn.Module):
                 D_input = torch.cat([D_input, x], 0)
             D_class = torch.cat([D_class, dy], 0)
         # Get Discriminator output
-        D_out, D_out_augself = self.D(D_input, D_input_orig, D_input_augself, D_class)
+        D_out, D_out_augself = self.D(D_input, D_input_orig, D_class)
         if G_z is None:
             return D_out
         elif x is not None:
             if CR:
                 return torch.split(D_out, [G_z.shape[0], x.shape[0], x.shape[0]])
             else:
-                return torch.split(D_out, [G_z.shape[0], x.shape[0]]), D_out_augself, D_gt_augself
+                return torch.split(D_out, [G_z.shape[0], x.shape[0]]), D_out_augself, D_gts_augself
         else:
             if return_G_z:
                 return D_out, G_z
             else:
-                return D_out, D_out_augself, D_gt_augself
+                return D_out, D_out_augself, D_gts_augself

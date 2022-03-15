@@ -1,6 +1,6 @@
 #!/bin/bash
-python train.py --experiment_name AugSelf-DiffAugment-biggan-cifar10 --DiffAugment color,translation,cutout \
---augself color,translation,cutout,rotation --D_augself_lambda 10.0 --G_augself_lambda 10.0 \
+python train.py --experiment_name la-color-d10g10-DiffAugment-biggan-cifar10 --DiffAugment color,translation,cutout \
+--augself color --selfsup labelaug --D_augself 10.0 --G_augself 10.0 \
 --mirror_augment --use_multiepoch_sampler \
 --which_best FID --num_inception_images 10000 \
 --shuffle --batch_size 50 --parallel \
