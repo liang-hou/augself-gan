@@ -3,6 +3,7 @@ Functions for the main loop of training different conditional image models
 '''
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 import torchvision
 import os
 from tqdm import tqdm
@@ -10,7 +11,7 @@ import numpy as np
 
 import utils
 import losses
-from DiffAugment_pytorch import DiffAugment
+from DiffAugment_pytorch import AUGMENT_TPS
 
 
 # Dummy training function for debugging
@@ -40,9 +41,9 @@ def GAN_training_function(G, D, GD, z_, y_, ema, state_dict, config):
             for accumulation_index in range(config['num_D_accumulations']):
                 z_.sample_()
                 y_.sample_()
-                D_scores = GD(z_[:config['batch_size']], y_[:config['batch_size']],
+                *D_scores, D_out_augself, D_gts_augself = GD(z_[:config['batch_size']], y_[:config['batch_size']],
                               x[counter], y[counter], train_G=False, policy=config['DiffAugment'],
-                              CR=config['CR'] > 0, CR_augment=config['CR_augment'])
+                              CR=config['CR'] > 0, CR_augment=config['CR_augment'], augself=config['augself'])
 
                 D_loss_CR = 0
                 if config['CR'] > 0:
@@ -50,13 +51,31 @@ def GAN_training_function(G, D, GD, z_, y_, ema, state_dict, config):
                     D_loss_CR = torch.mean(
                         (D_real_aug - D_real) ** 2) * config['CR']
                 else:
-                    D_fake, D_real = D_scores
+                    D_fake, D_real = D_scores[0]
 
                 # Compute components of D's loss, average them, and divide by
                 # the number of gradient accumulations
                 D_loss_real, D_loss_fake = losses.discriminator_loss(
                     D_fake, D_real)
-                D_loss = D_loss_real + D_loss_fake + D_loss_CR
+                D_loss_augself = 0.
+                for aug in config['augself'].split(','):
+                    if AUGMENT_TPS[aug] == 'regression':
+                        if config['selfsup'] == 'labelaug':
+                            D_loss_augself += F.mse_loss(D_out_augself[aug][:config['batch_size']], -D_gts_augself[aug][:config['batch_size']])
+                            D_loss_augself += F.mse_loss(D_out_augself[aug][config['batch_size']:],  D_gts_augself[aug][config['batch_size']:])
+                        elif config['selfsup'] == 'ss':
+                            D_loss_augself += F.mse_loss(D_out_augself[aug][config['batch_size']:],  D_gts_augself[aug][config['batch_size']:])
+                        elif config['selfsup'] == 'ss+':
+                            D_loss_augself += F.mse_loss(D_out_augself[aug], D_gts_augself[aug])
+                    elif AUGMENT_TPS[aug] == 'classification':
+                        if config['selfsup'] == 'labelaug':
+                            D_loss_augself += F.cross_entropy(D_out_augself[aug][:config['batch_size']], D_gts_augself[aug][:config['batch_size']] * 2 + 1)
+                            D_loss_augself += F.cross_entropy(D_out_augself[aug][config['batch_size']:], D_gts_augself[aug][config['batch_size']:] * 2)
+                        elif config['selfsup'] == 'ss':
+                            D_loss_augself += F.cross_entropy(D_out_augself[aug][config['batch_size']:], D_gts_augself[aug][config['batch_size']:])
+                        elif config['selfsup'] == 'ss+':
+                            D_loss_augself += F.cross_entropy(D_out_augself[aug], D_gts_augself[aug])
+                D_loss = D_loss_real + D_loss_fake + D_loss_CR + D_loss_augself * config['D_augself']
                 D_loss = D_loss / float(config['num_D_accumulations'])
                 D_loss.backward()
                 counter += 1
@@ -82,10 +101,25 @@ def GAN_training_function(G, D, GD, z_, y_, ema, state_dict, config):
             for accumulation_index in range(config['num_G_accumulations']):
                 z_.sample_()
                 y_.sample_()
-                D_fake = GD(z_, y_, train_G=True, policy=config['DiffAugment'])
+                D_fake, D_out_augself, D_gts_augself = GD(z_, y_, train_G=True, policy=config['DiffAugment'], augself=config['augself'])
+                G_loss_augself = 0.
+                for aug in config['augself'].split(','):
+                    if AUGMENT_TPS[aug] == 'regression':
+                        if config['selfsup'] == 'labelaug':
+                            G_loss_augself += F.mse_loss(D_out_augself[aug],  D_gts_augself[aug])
+                            G_loss_augself -= F.mse_loss(D_out_augself[aug], -D_gts_augself[aug])
+                        elif config['selfsup'] == 'ss' or config['selfsup'] == 'ss+':
+                            G_loss_augself += F.mse_loss(D_out_augself[aug],  D_gts_augself[aug])
+                    elif AUGMENT_TPS[aug] == 'classification':
+                        if config['selfsup'] == 'labelaug':
+                            G_loss_augself += F.cross_entropy(D_out_augself[aug], D_gts_augself[aug] * 2)
+                            G_loss_augself -= F.cross_entropy(D_out_augself[aug], D_gts_augself[aug] * 2 + 1)
+                        elif config['selfsup'] == 'ss' or config['selfsup'] == 'ss+':
+                            G_loss_augself += F.cross_entropy(D_out_augself[aug], D_gts_augself[aug])
+                G_loss_augself = G_loss_augself * config['G_augself'] / float(config['num_G_accumulations'])
                 G_loss = losses.generator_loss(
                     D_fake) / float(config['num_G_accumulations'])
-                G_loss.backward()
+                (G_loss + G_loss_augself).backward()
 
             # Optionally apply modified ortho reg in G
             if config['G_ortho'] > 0.0:
@@ -192,7 +226,7 @@ def test(G, D, GD, G_ema, z_, y_, state_dict, config, sample, get_inception_metr
         **{**config, 'train': False, 'use_multiepoch_sampler': False, 'load_in_mem': False})[0]
     with torch.no_grad():
         for x, y in loader:
-            D_real = GD(None, None, x=x, dy=y, policy=config['DiffAugment'])
+            D_real, *_ = GD(None, None, x=x, dy=y, policy=config['DiffAugment'])
             D_accuracy.append((D_real > 0).float().mean().item())
     D.train()
     D_acc_val = np.mean(D_accuracy)
@@ -204,7 +238,7 @@ def test(G, D, GD, G_ema, z_, y_, state_dict, config, sample, get_inception_metr
         **{**config, 'train': True, 'use_multiepoch_sampler': False, 'load_in_mem': False})[0]
     with torch.no_grad():
         for x, y in loader:
-            D_real = GD(None, None, x=x, dy=y, policy=config['DiffAugment'])
+            D_real, *_ = GD(None, None, x=x, dy=y, policy=config['DiffAugment'])
             D_accuracy.append((D_real > 0).float().mean().item())
     D.train()
     D_acc_train = np.mean(D_accuracy)

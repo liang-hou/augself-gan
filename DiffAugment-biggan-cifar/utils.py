@@ -148,6 +148,18 @@ def prepare_parser():
     parser.add_argument(
         '--CR', type=float, default=0,
         help='Consistency Regularization for GANs (default: %(default)s)')
+    parser.add_argument(
+        '--augself', type=str, default='color,translation,cutout',
+        help='Augmentation-Aware Self-Supervision Augmentation')
+    parser.add_argument(
+        '--selfsup', type=str, default='labelaug',
+        help='Self-Supervised Learning for GAN (default: %(default)s)')
+    parser.add_argument(
+        '--D_augself', type=float, default=0.,
+        help='Augmentation-Aware Self-Supervision for D (default: %(default)s)')
+    parser.add_argument(
+        '--G_augself', type=float, default=0.,
+        help='Augmentation-Aware Self-Supervision for G (default: %(default)s)')
 
     ### Model init stuff ###
     parser.add_argument(
