@@ -11,6 +11,7 @@ import numpy as np
 
 import utils
 import losses
+from DiffAugment_pytorch import AUGMENT_FNS, AUGMENT_TPS
 
 
 # Dummy training function for debugging
@@ -58,13 +59,22 @@ def GAN_training_function(G, D, GD, z_, y_, ema, state_dict, config):
                     D_fake, D_real)
                 D_loss_augself = 0.
                 for aug in config['augself'].split(','):
-                    if config['selfsup'] == 'labelaug':
-                        D_loss_augself += F.mse_loss(D_out_augself[aug][:config['batch_size']], -D_gts_augself[aug][:config['batch_size']])
-                        D_loss_augself += F.mse_loss(D_out_augself[aug][config['batch_size']:],  D_gts_augself[aug][config['batch_size']:])
-                    elif config['selfsup'] == 'ss':
-                        D_loss_augself += F.mse_loss(D_out_augself[aug][config['batch_size']:],  D_gts_augself[aug][config['batch_size']:])
-                    elif config['selfsup'] == 'ss+':
-                        D_loss_augself += F.mse_loss(D_out_augself[aug], D_gts_augself[aug])
+                    if AUGMENT_TPS[aug] == "regression":
+                        if config['selfsup'] == 'labelaug':
+                            D_loss_augself += F.mse_loss(D_out_augself[aug][:config['batch_size']], -D_gts_augself[aug][:config['batch_size']])
+                            D_loss_augself += F.mse_loss(D_out_augself[aug][config['batch_size']:],  D_gts_augself[aug][config['batch_size']:])
+                        elif config['selfsup'] == 'ss':
+                            D_loss_augself += F.mse_loss(D_out_augself[aug][config['batch_size']:],  D_gts_augself[aug][config['batch_size']:])
+                        elif config['selfsup'] == 'ss+':
+                            D_loss_augself += F.mse_loss(D_out_augself[aug], D_gts_augself[aug])
+                    elif AUGMENT_TPS[aug] == "classification":
+                        if config['selfsup'] == 'labelaug':
+                            D_loss_augself += F.cross_entropy(D_out_augself[aug][:config['batch_size']], D_gts_augself[aug][:config['batch_size']] * 2 + 1)
+                            D_loss_augself += F.cross_entropy(D_out_augself[aug][config['batch_size']:], D_gts_augself[aug][config['batch_size']:] * 2)
+                        elif config['selfsup'] == 'ss':
+                            D_loss_augself += F.cross_entropy(D_out_augself[aug][config['batch_size']:],  D_gts_augself[aug][config['batch_size']:])
+                        elif config['selfsup'] == 'ss+':
+                            D_loss_augself += F.cross_entropy(D_out_augself[aug], D_gts_augself[aug])
                 D_loss = D_loss_real + D_loss_fake + D_loss_CR + D_loss_augself * config['D_augself']
                 D_loss = D_loss / float(config['num_D_accumulations'])
                 D_loss.backward()
@@ -94,11 +104,18 @@ def GAN_training_function(G, D, GD, z_, y_, ema, state_dict, config):
                 D_fake, D_out_augself, D_gts_augself = GD(z_, y_, train_G=True, policy=config['DiffAugment'])
                 G_loss_augself = 0.
                 for aug in config['augself'].split(','):
-                    if config['selfsup'] == 'labelaug':
-                        G_loss_augself += F.mse_loss(D_out_augself[aug],  D_gts_augself[aug])
-                        G_loss_augself -= F.mse_loss(D_out_augself[aug], -D_gts_augself[aug])
-                    elif config['selfsup'] == 'ss' or config['selfsup'] == 'ss+':
-                        G_loss_augself += F.mse_loss(D_out_augself[aug],  D_gts_augself[aug])
+                    if AUGMENT_TPS[aug] == "regression":
+                        if config['selfsup'] == 'labelaug':
+                            G_loss_augself += F.mse_loss(D_out_augself[aug],  D_gts_augself[aug])
+                            G_loss_augself -= F.mse_loss(D_out_augself[aug], -D_gts_augself[aug])
+                        elif config['selfsup'] == 'ss' or config['selfsup'] == 'ss+':
+                            G_loss_augself += F.mse_loss(D_out_augself[aug],  D_gts_augself[aug])
+                    elif AUGMENT_TPS[aug] == "classification":
+                        if config['selfsup'] == 'labelaug':
+                            G_loss_augself += F.cross_entropy(D_out_augself[aug], D_gts_augself[aug] * 2)
+                            G_loss_augself -= F.cross_entropy(D_out_augself[aug], D_gts_augself[aug] * 2 + 1)
+                        elif config['selfsup'] == 'ss' or config['selfsup'] == 'ss+':
+                            G_loss_augself += F.cross_entropy(D_out_augself[aug],  D_gts_augself[aug])
                 G_loss_augself = G_loss_augself * config['G_augself'] / float(config['num_G_accumulations'])
                 G_loss = losses.generator_loss(
                     D_fake) / float(config['num_G_accumulations'])

@@ -1,4 +1,4 @@
-from DiffAugment_pytorch import DiffAugment, AUGMENT_DMS
+from DiffAugment_pytorch import DiffAugment, AUGMENT_DMS, AUGMENT_TPS
 import numpy as np
 import math
 import functools
@@ -294,7 +294,7 @@ class Discriminator(nn.Module):
                  num_D_SVs=1, num_D_SV_itrs=1, D_activation=nn.ReLU(inplace=False),
                  D_lr=2e-4, D_B1=0.0, D_B2=0.999, adam_eps=1e-8,
                  SN_eps=1e-12, output_dim=1, D_mixed_precision=False, D_fp16=False,
-                 D_init='ortho', skip_init=False, D_param='SN', augself=None, **kwargs):
+                 D_init='ortho', skip_init=False, D_param='SN', augself=None, selfsup='', **kwargs):
         super(Discriminator, self).__init__()
         # Width multiplier
         self.ch = D_ch
@@ -371,10 +371,13 @@ class Discriminator(nn.Module):
             self.n_classes, self.arch['out_channels'][-1])
         
         self.augself = augself
+        self.selfsup = selfsup
         if self.augself:
             self.linear_augself = {}
             for aug in self.augself.split(','):
-                self.linear_augself[aug] = self.which_linear(self.arch['out_channels'][-1], AUGMENT_DMS[aug])
+                self.linear_augself[aug] = self.which_linear(self.arch['out_channels'][-1], 
+                                                AUGMENT_DMS[aug] * 2 if AUGMENT_TPS[aug] == 'classification' and \
+                                                self.selfsup == 'labelaug' else AUGMENT_DMS[aug])
             self.linear_augself = nn.ModuleDict(self.linear_augself)
 
         # Initialize weights
