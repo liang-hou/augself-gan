@@ -108,7 +108,7 @@ AUGMENT_DMS = {
     'color': 3,
     'translation': 2,
     'cutout': 2,
-    'rotaion': 4,
+    'rotation': 4,
     'permutation': 6
 }
 
