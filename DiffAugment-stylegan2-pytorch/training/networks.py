@@ -625,7 +625,7 @@ class DiscriminatorEpilogue(torch.nn.Module):
         mbstd_num_channels  = 1,        # Number of features for the minibatch standard deviation layer, 0 = disable.
         activation          = 'lrelu',  # Activation function: 'relu', 'lrelu', etc.
         conv_clamp          = None,     # Clamp the output of convolution layers to +-X, None = disable clamping.
-        out_dim             = -1,       # Dimensionality of output layer, -1 = default discriminator.
+        out_dimension       = -1,       # Dimensionality of output layer, -1 = default discriminator.
     ):
         assert architecture in ['orig', 'skip', 'resnet']
         super().__init__()
@@ -640,8 +640,8 @@ class DiscriminatorEpilogue(torch.nn.Module):
         self.mbstd = MinibatchStdLayer(group_size=mbstd_group_size, num_channels=mbstd_num_channels) if mbstd_num_channels > 0 else None
         self.conv = Conv2dLayer(in_channels + mbstd_num_channels, in_channels, kernel_size=3, activation=activation, conv_clamp=conv_clamp)
         self.fc = FullyConnectedLayer(in_channels * (resolution ** 2), in_channels, activation=activation)
-        if out_dim > 0:
-            self.out = FullyConnectedLayer(in_channels, out_dim)
+        if out_dimension > 0:
+            self.out = FullyConnectedLayer(in_channels, out_dimension)
         else:
             self.out = FullyConnectedLayer(in_channels, 1 if cmap_dim == 0 else cmap_dim)
 
@@ -720,7 +720,7 @@ class Discriminator(torch.nn.Module):
         if c_dim > 0:
             self.mapping = MappingNetwork(z_dim=0, c_dim=c_dim, w_dim=cmap_dim, num_ws=None, w_avg_beta=None, **mapping_kwargs)
         self.b4 = DiscriminatorEpilogue(channels_dict[4], cmap_dim=cmap_dim, resolution=4, **epilogue_kwargs, **common_kwargs)
-        self.augself = augself
+        self.augself = 'color,translation,cutout'
         self.out_augself = {}
         for aug in self.augself.split(','):
             if aug not in AUGMENT_DMS:
