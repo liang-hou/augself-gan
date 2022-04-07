@@ -728,13 +728,14 @@ class Discriminator(torch.nn.Module):
             self.out_augself[aug] = DiscriminatorEpilogue(channels_dict[4], cmap_dim=0, out_dimension=AUGMENT_DMS[aug], resolution=4, **epilogue_kwargs, **common_kwargs)
         self.out_augself = torch.nn.ModuleDict(self.out_augself)
 
-    def forward(self, img, img_o, c, **block_kwargs):
+    def forward(self, img, c, img_o=None, **block_kwargs):
         x = None
         x_o = None
         for res in self.block_resolutions:
             block = getattr(self, f'b{res}')
             x, img = block(x, img, **block_kwargs)
-            x_o, img_o = block(x_o, img_o, **block_kwargs)
+            if img_o is not None or x_o is not None:
+                x_o, img_o = block(x_o, img_o, **block_kwargs)
 
         cmap = None
         if self.c_dim > 0:
@@ -744,6 +745,8 @@ class Discriminator(torch.nn.Module):
         for aug in self.augself.split(','):
             if aug not in AUGMENT_DMS:
                 continue
+            if x_o is None:
+                break
             x_augself[aug] = self.out_augself[aug](x - x_o, img - img_o, cmap)
         return x, x_augself
 
