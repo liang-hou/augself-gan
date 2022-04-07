@@ -15,6 +15,8 @@ from torch_utils.ops import upfirdn2d
 from torch_utils.ops import bias_act
 from torch_utils.ops import fma
 
+from DiffAugment_pytorch import AUGMENT_DMS
+
 #----------------------------------------------------------------------------
 
 @misc.profiled_function
@@ -623,6 +625,7 @@ class DiscriminatorEpilogue(torch.nn.Module):
         mbstd_num_channels  = 1,        # Number of features for the minibatch standard deviation layer, 0 = disable.
         activation          = 'lrelu',  # Activation function: 'relu', 'lrelu', etc.
         conv_clamp          = None,     # Clamp the output of convolution layers to +-X, None = disable clamping.
+        out_dim             = -1,       # Dimensionality of output layer, -1 = default discriminator.
     ):
         assert architecture in ['orig', 'skip', 'resnet']
         super().__init__()
@@ -637,7 +640,10 @@ class DiscriminatorEpilogue(torch.nn.Module):
         self.mbstd = MinibatchStdLayer(group_size=mbstd_group_size, num_channels=mbstd_num_channels) if mbstd_num_channels > 0 else None
         self.conv = Conv2dLayer(in_channels + mbstd_num_channels, in_channels, kernel_size=3, activation=activation, conv_clamp=conv_clamp)
         self.fc = FullyConnectedLayer(in_channels * (resolution ** 2), in_channels, activation=activation)
-        self.out = FullyConnectedLayer(in_channels, 1 if cmap_dim == 0 else cmap_dim)
+        if out_dim > 0:
+            self.out = FullyConnectedLayer(in_channels, out_dim)
+        else:
+            self.out = FullyConnectedLayer(in_channels, 1 if cmap_dim == 0 else cmap_dim)
 
     def forward(self, x, img, cmap, force_fp32=False):
         misc.assert_shape(x, [None, self.in_channels, self.resolution, self.resolution]) # [NCHW]
@@ -684,6 +690,7 @@ class Discriminator(torch.nn.Module):
         block_kwargs        = {},       # Arguments for DiscriminatorBlock.
         mapping_kwargs      = {},       # Arguments for MappingNetwork.
         epilogue_kwargs     = {},       # Arguments for DiscriminatorEpilogue.
+        augself             = '',       # Augmentation-aware self-supervision.
     ):
         super().__init__()
         self.c_dim = c_dim
@@ -713,17 +720,31 @@ class Discriminator(torch.nn.Module):
         if c_dim > 0:
             self.mapping = MappingNetwork(z_dim=0, c_dim=c_dim, w_dim=cmap_dim, num_ws=None, w_avg_beta=None, **mapping_kwargs)
         self.b4 = DiscriminatorEpilogue(channels_dict[4], cmap_dim=cmap_dim, resolution=4, **epilogue_kwargs, **common_kwargs)
+        self.augself = augself
+        self.out_augself = {}
+        for aug in self.augself.split(','):
+            if aug not in AUGMENT_DMS:
+                continue
+            self.out_augself[aug] = DiscriminatorEpilogue(channels_dict[4], cmap_dim=0, out_dimension=AUGMENT_DMS[aug], resolution=4, **epilogue_kwargs, **common_kwargs)
+        self.out_augself = torch.nn.ModuleDict(self.out_augself)
 
-    def forward(self, img, c, **block_kwargs):
+    def forward(self, img, img_o, c, **block_kwargs):
         x = None
+        x_o = None
         for res in self.block_resolutions:
             block = getattr(self, f'b{res}')
             x, img = block(x, img, **block_kwargs)
+            x_o, img_o = block(x_o, img_o, **block_kwargs)
 
         cmap = None
         if self.c_dim > 0:
             cmap = self.mapping(None, c)
         x = self.b4(x, img, cmap)
-        return x
+        x_augself = {}
+        for aug in self.augself.split(','):
+            if aug not in AUGMENT_DMS:
+                continue
+            x_augself[aug] = self.out_augself[aug](x - x_o, img - img_o, cmap)
+        return x, x_augself
 
 #----------------------------------------------------------------------------

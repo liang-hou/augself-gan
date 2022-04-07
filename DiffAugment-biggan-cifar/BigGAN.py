@@ -435,8 +435,9 @@ class Discriminator(nn.Module):
         # Get projection of final featureset onto class vectors and add to evidence
         out = out + torch.sum(self.embed(y) * h, 1, keepdim=True)
         out_augself = {}
-        for aug in self.augself.split(','):
-            out_augself[aug] = self.linear_augself[aug](h - h_o)
+        if self.augself:
+            for aug in self.augself.split(','):
+                out_augself[aug] = self.linear_augself[aug](h - h_o)
         return out, out_augself
 
 
