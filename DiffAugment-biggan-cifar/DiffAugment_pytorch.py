@@ -57,7 +57,7 @@ def rand_translation(x, ratio=0.125):
     grid_y = torch.clamp(grid_y + translation_y + 1, 0, x.size(3) + 1)
     x_pad = F.pad(x, [1, 1, 1, 1, 0, 0, 0, 0])
     x = x_pad.permute(0, 2, 3, 1).contiguous()[grid_batch, grid_x, grid_y].permute(0, 3, 1, 2).contiguous()
-    return x, torch.cat([translation_x.view(-1, 1).float() / shift_x, translation_y.view(-1, 1).float() / shift_y], 1)
+    return x, torch.cat([translation_x.view(-1, 1).float() / shift_x / 2.0 + 0.5, translation_y.view(-1, 1).float() / shift_y / 2.0 + 0.5], 1)
 
 
 def rand_cutout(x, ratio=0.5):

@@ -57,7 +57,7 @@ class StyleGAN2Loss(Loss):
         if self.augment_pipe is not None:
             img = self.augment_pipe(img)
         with misc.ddp_sync(self.D, sync):
-            logits, logits_augself = self.D(img, img_o, c)
+            logits, logits_augself = self.D(img=img, img_o=img_o, c=c)
         return logits, logits_augself, labels_augself
 
     def accumulate_gradients(self, phase, real_img, real_c, gen_z, gen_c, sync, gain):
@@ -66,6 +66,8 @@ class StyleGAN2Loss(Loss):
         do_Dmain = (phase in ['Dmain', 'Dboth'])
         do_Gpl   = (phase in ['Greg', 'Gboth']) and (self.pl_weight != 0)
         do_Dr1   = (phase in ['Dreg', 'Dboth']) and (self.r1_gamma != 0)
+        lambda_G = 1.0
+        lambda_D = 1.0
 
         # Gmain: Maximize logits for generated images.
         if do_Gmain:
@@ -82,7 +84,7 @@ class StyleGAN2Loss(Loss):
                         loss_Gaugself += torch.nn.functional.mse_loss(gen_logits_augself[aug],  gen_labels_augself[aug])
                         loss_Gaugself -= torch.nn.functional.mse_loss(gen_logits_augself[aug], -gen_labels_augself[aug])
             with torch.autograd.profiler.record_function('Gmain_backward'):
-                (loss_Gmain.mean() + loss_Gaugself).mul(gain).backward()
+                (loss_Gmain.mean() + loss_Gaugself * lambda_G).mul(gain).backward()
 
         # Gpl: Apply path length regularization.
         if do_Gpl:
@@ -116,7 +118,7 @@ class StyleGAN2Loss(Loss):
                     if aug in AUGMENT_TPS:
                         loss_Dgen_augself += torch.nn.functional.mse_loss(gen_logits_augself[aug], -gen_labels_augself[aug])
             with torch.autograd.profiler.record_function('Dgen_backward'):
-                (loss_Dgen.mean() + loss_Dgen_augself).mul(gain).backward()
+                (loss_Dgen.mean() + loss_Dgen_augself * lambda_D).mul(gain).backward()
 
         # Dmain: Maximize logits for real images.
         # Dr1: Apply R1 regularization.
@@ -147,6 +149,6 @@ class StyleGAN2Loss(Loss):
                     training_stats.report('Loss/D/reg', loss_Dr1)
 
             with torch.autograd.profiler.record_function(name + '_backward'):
-                ((real_logits * 0 + loss_Dreal + loss_Dr1).mean() + loss_Dreal_augself).mul(gain).backward()
+                ((real_logits * 0 + loss_Dreal + loss_Dr1).mean() + loss_Dreal_augself * lambda_D).mul(gain).backward()
 
 #----------------------------------------------------------------------------

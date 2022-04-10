@@ -740,14 +740,14 @@ class Discriminator(torch.nn.Module):
         cmap = None
         if self.c_dim > 0:
             cmap = self.mapping(None, c)
-        x = self.b4(x, img, cmap)
+        x_b4 = self.b4(x, img, cmap)
         x_augself = {}
         for aug in self.augself.split(','):
             if aug not in AUGMENT_DMS:
                 continue
             if x_o is None:
                 break
-            x_augself[aug] = self.out_augself[aug](x - x_o, img - img_o, cmap)
-        return x, x_augself
+            x_augself[aug] = self.out_augself[aug](x - x_o, None, cmap)
+        return x_b4, x_augself
 
 #----------------------------------------------------------------------------
