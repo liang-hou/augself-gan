@@ -742,6 +742,8 @@ class Discriminator(torch.nn.Module):
         x_b4 = self.b4(x, img, cmap)
         x_augself = {}
         for aug in self.augself.split(','):
+            if x_o is None:
+                break
             if aug in AUGMENT_DMS:
                 x_augself[aug] = self.out_augself[aug](x - x_o, None, cmap)
 
