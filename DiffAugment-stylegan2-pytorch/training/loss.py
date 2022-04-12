@@ -81,8 +81,8 @@ class StyleGAN2Loss(Loss):
                 loss_Gaugself = 0
                 for aug in self.D.augself.split(','):
                     if aug in AUGMENT_TPS:
-                        loss_Gaugself += torch.nn.functional.mse_loss(gen_logits_augself[aug],  gen_labels_augself[aug])
-                        loss_Gaugself -= torch.nn.functional.mse_loss(gen_logits_augself[aug], -gen_labels_augself[aug])
+                        loss_Gaugself += torch.nn.functional.mse_loss(gen_logits_augself[aug], +1 + gen_labels_augself[aug])
+                        loss_Gaugself -= torch.nn.functional.mse_loss(gen_logits_augself[aug], -1 - gen_labels_augself[aug])
             with torch.autograd.profiler.record_function('Gmain_backward'):
                 (loss_Gmain.mean() + loss_Gaugself * lambda_G).mul(gain).backward()
 
@@ -116,7 +116,7 @@ class StyleGAN2Loss(Loss):
                 loss_Dgen = torch.nn.functional.softplus(gen_logits) # -log(1 - sigmoid(gen_logits))
                 for aug in self.D.augself.split(','):
                     if aug in AUGMENT_TPS:
-                        loss_Dgen_augself += torch.nn.functional.mse_loss(gen_logits_augself[aug], -gen_labels_augself[aug])
+                        loss_Dgen_augself += torch.nn.functional.mse_loss(gen_logits_augself[aug], -1 - gen_labels_augself[aug])
             with torch.autograd.profiler.record_function('Dgen_backward'):
                 (loss_Dgen.mean() + loss_Dgen_augself * lambda_D).mul(gain).backward()
 
@@ -137,7 +137,7 @@ class StyleGAN2Loss(Loss):
                     training_stats.report('Loss/D/loss', loss_Dgen + loss_Dreal)
                     for aug in self.D.augself.split(','):
                         if aug in AUGMENT_TPS:
-                            loss_Dreal_augself += torch.nn.functional.mse_loss(real_logits_augself[aug], real_logits_augself[aug])
+                            loss_Dreal_augself += torch.nn.functional.mse_loss(real_logits_augself[aug], +1 + real_logits_augself[aug])
 
                 loss_Dr1 = 0
                 if do_Dr1:

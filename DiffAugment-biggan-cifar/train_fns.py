@@ -62,8 +62,8 @@ def GAN_training_function(G, D, GD, z_, y_, ema, state_dict, config):
                     for aug in config['augself'].split(','):
                         if AUGMENT_TPS[aug] == "regression":
                             if config['selfsup'] == 'labelaug':
-                                D_loss_augself += F.mse_loss(D_out_augself[aug][:config['batch_size']], -D_gts_augself[aug][:config['batch_size']])
-                                D_loss_augself += F.mse_loss(D_out_augself[aug][config['batch_size']:],  D_gts_augself[aug][config['batch_size']:])
+                                D_loss_augself += F.mse_loss(D_out_augself[aug][:config['batch_size']], -1 - D_gts_augself[aug][:config['batch_size']])
+                                D_loss_augself += F.mse_loss(D_out_augself[aug][config['batch_size']:], +1 + D_gts_augself[aug][config['batch_size']:])
                             elif config['selfsup'] == 'ss':
                                 D_loss_augself += F.mse_loss(D_out_augself[aug][config['batch_size']:],  D_gts_augself[aug][config['batch_size']:])
                             elif config['selfsup'] == 'ss+':
@@ -108,8 +108,8 @@ def GAN_training_function(G, D, GD, z_, y_, ema, state_dict, config):
                     for aug in config['augself'].split(','):
                         if AUGMENT_TPS[aug] == "regression":
                             if config['selfsup'] == 'labelaug':
-                                G_loss_augself += F.mse_loss(D_out_augself[aug],  D_gts_augself[aug])
-                                G_loss_augself -= F.mse_loss(D_out_augself[aug], -D_gts_augself[aug])
+                                G_loss_augself += F.mse_loss(D_out_augself[aug], +1 + D_gts_augself[aug])
+                                G_loss_augself -= F.mse_loss(D_out_augself[aug], -1 - D_gts_augself[aug])
                             elif config['selfsup'] == 'ss' or config['selfsup'] == 'ss+':
                                 G_loss_augself += F.mse_loss(D_out_augself[aug],  D_gts_augself[aug])
                         elif AUGMENT_TPS[aug] == "classification":
