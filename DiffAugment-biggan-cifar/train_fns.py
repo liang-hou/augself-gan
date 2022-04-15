@@ -116,7 +116,7 @@ def GAN_training_function(G, D, GD, z_, y_, ema, state_dict, config):
                             if config['selfsup'] == 'la':
                                 G_loss_augself += F.mse_loss(D_out_augself[aug], +config['margin'] + D_gts_augself[aug])
                                 G_loss_augself -= F.mse_loss(D_out_augself[aug], -config['margin'] - D_gts_augself[aug])
-                            elif config['seflsup'] in {'la-', 'ls+'}:
+                            elif config['selfsup'] in {'la-', 'ls+'}:
                                 G_loss_augself += F.mse_loss(D_out_augself[aug], +config['margin'] + D_gts_augself[aug])
                             elif config['selfsup'] == 'ls':
                                 G_loss_augself += F.mse_loss(D_out_augself[aug], D_gts_augself[aug] - D_gts_augself[aug])
