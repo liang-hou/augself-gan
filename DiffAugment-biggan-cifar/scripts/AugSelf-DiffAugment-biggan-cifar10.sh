@@ -1,10 +1,10 @@
 #!/bin/bash
-python train.py --experiment_name la-color-d1g1-DiffAugment-biggan-cifar10 --DiffAugment color,translation,cutout \
---augself color --selfsup labelaug --D_augself 1.0 --G_augself 1.0 \
+python train.py --experiment_name la-bilinear-margin1-color+translation+cutout-d1g1-DiffAugment-biggan-cifar10 --DiffAugment color,translation,cutout \
+--augself color,translation,cutout --selfsup la --D_out_form bilinear --margin 1.0 --D_augself 1.0 --G_augself 1.0 \
 --mirror_augment --use_multiepoch_sampler \
 --which_best FID --num_inception_images 10000 \
 --shuffle --batch_size 50 --parallel \
---num_G_accumulations 1 --num_D_accumulations 1 --num_epochs 1000 \
+--num_G_accumulations 1 --num_D_accumulations 1 --num_epochs 2000 \
 --num_D_steps 4 --G_lr 2e-4 --D_lr 2e-4 \
 --dataset C10 \
 --G_ortho 0.0 \

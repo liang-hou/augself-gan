@@ -152,13 +152,19 @@ def prepare_parser():
         '--augself', type=str, default='color,translation,cutout',
         help='Augmentation-Aware Self-Supervision Augmentation')
     parser.add_argument(
-        '--selfsup', type=str, default='labelaug',
+        '--selfsup', type=str, default='la',
         help='Self-Supervised Learning for GAN (default: %(default)s)')
     parser.add_argument(
-        '--D_augself', type=float, default=0.,
+        '--D_out_form', type=str, default='linear',
+        help='Output form for Self-Supervision of D (default: %(default)s)')
+    parser.add_argument(
+        '--margin', type=float, default=1.,
+        help='Margin for the least squares loss (default: %(default)s)')
+    parser.add_argument(
+        '--D_augself', type=float, default=1.,
         help='Augmentation-Aware Self-Supervision for D (default: %(default)s)')
     parser.add_argument(
-        '--G_augself', type=float, default=0.,
+        '--G_augself', type=float, default=1.,
         help='Augmentation-Aware Self-Supervision for G (default: %(default)s)')
 
     ### Model init stuff ###

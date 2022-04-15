@@ -294,7 +294,7 @@ class Discriminator(nn.Module):
                  num_D_SVs=1, num_D_SV_itrs=1, D_activation=nn.ReLU(inplace=False),
                  D_lr=2e-4, D_B1=0.0, D_B2=0.999, adam_eps=1e-8,
                  SN_eps=1e-12, output_dim=1, D_mixed_precision=False, D_fp16=False,
-                 D_init='ortho', skip_init=False, D_param='SN', augself=None, selfsup='', **kwargs):
+                 D_init='ortho', skip_init=False, D_param='SN', augself='', selfsup='', D_out_form='linear', **kwargs):
         super(Discriminator, self).__init__()
         # Width multiplier
         self.ch = D_ch
@@ -370,15 +370,22 @@ class Discriminator(nn.Module):
         self.embed = self.which_embedding(
             self.n_classes, self.arch['out_channels'][-1])
         
+        self.out_form = D_out_form
         self.augself = augself
         self.selfsup = selfsup
-        if self.augself:
-            self.linear_augself = {}
-            for aug in self.augself.split(','):
-                self.linear_augself[aug] = self.which_linear(self.arch['out_channels'][-1], 
-                                                AUGMENT_DMS[aug] * 2 if AUGMENT_TPS[aug] == 'classification' and \
-                                                self.selfsup == 'labelaug' else AUGMENT_DMS[aug])
-            self.linear_augself = nn.ModuleDict(self.linear_augself)
+        self.out_augself = {}
+        for aug in self.augself.split(','):
+            out_dim = AUGMENT_DMS[aug] * 2 if AUGMENT_TPS[aug] == 'classification' and self.selfsup in {'la', 'la-'} else \
+                      AUGMENT_DMS[aug] + 1 if AUGMENT_TPS[aug] == 'classification' and self.selfsup in {'ms', 'ms-'} else \
+                      AUGMENT_DMS[aug]
+            if self.out_form == 'linear':
+                self.out_augself[aug] = self.which_linear(self.arch['out_channels'][-1], out_dim)
+            elif self.out_form =='bilinear':
+                if self.D_param == 'SN':
+                    self.out_augself[aug] = nn.utils.spectral_norm(nn.Bilinear(self.arch['out_channels'][-1], self.arch['out_channels'][-1], out_dim))
+                else:
+                    self.out_augself[aug] = nn.Bilinear(self.arch['out_channels'][-1], self.arch['out_channels'][-1], out_dim)
+        self.out_augself = nn.ModuleDict(self.out_augself)
 
         # Initialize weights
         if not skip_init:
@@ -435,9 +442,11 @@ class Discriminator(nn.Module):
         # Get projection of final featureset onto class vectors and add to evidence
         out = out + torch.sum(self.embed(y) * h, 1, keepdim=True)
         out_augself = {}
-        if self.augself:
-            for aug in self.augself.split(','):
-                out_augself[aug] = self.linear_augself[aug](h - h_o)
+        for aug in filter(None, self.augself.split(',')):
+            if self.out_form == 'linear':
+                out_augself[aug] = self.out_augself[aug](h - h_o)
+            elif self.out_form == 'bilinear':
+                out_augself[aug] = self.out_augself[aug](h, h_o)
         return out, out_augself
 
 
