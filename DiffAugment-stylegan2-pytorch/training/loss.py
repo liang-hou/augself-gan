@@ -23,7 +23,7 @@ class Loss:
 #----------------------------------------------------------------------------
 
 class StyleGAN2Loss(Loss):
-    def __init__(self, device, G_mapping, G_synthesis, D, diffaugment='', augment_pipe=None, style_mixing_prob=0.9, r1_gamma=10, pl_batch_shrink=2, pl_decay=0.01, pl_weight=2):
+    def __init__(self, device, G_mapping, G_synthesis, D, diffaugment='', augment_pipe=None, style_mixing_prob=0.9, r1_gamma=10, pl_batch_shrink=2, pl_decay=0.01, pl_weight=2, D_augself=1, G_augself=1, margin=0):
         super().__init__()
         self.device = device
         self.G_mapping = G_mapping
@@ -37,6 +37,10 @@ class StyleGAN2Loss(Loss):
         self.pl_decay = pl_decay
         self.pl_weight = pl_weight
         self.pl_mean = torch.zeros([], device=device)
+
+        self.D_augself = D_augself
+        self.G_augself = G_augself
+        self.margin = margin
 
     def run_G(self, z, c, sync):
         with misc.ddp_sync(self.G_mapping, sync):
@@ -66,8 +70,6 @@ class StyleGAN2Loss(Loss):
         do_Dmain = (phase in ['Dmain', 'Dboth'])
         do_Gpl   = (phase in ['Greg', 'Gboth']) and (self.pl_weight != 0)
         do_Dr1   = (phase in ['Dreg', 'Dboth']) and (self.r1_gamma != 0)
-        lambda_G = 1.0
-        lambda_D = 1.0
 
         # Gmain: Maximize logits for generated images.
         if do_Gmain:
@@ -81,10 +83,10 @@ class StyleGAN2Loss(Loss):
                 loss_Gaugself = 0
                 for aug in self.D.augself.split(','):
                     if aug in AUGMENT_TPS:
-                        loss_Gaugself += torch.nn.functional.mse_loss(gen_logits_augself[aug], +1 + gen_labels_augself[aug])
-                        loss_Gaugself -= torch.nn.functional.mse_loss(gen_logits_augself[aug], -1 - gen_labels_augself[aug])
+                        loss_Gaugself += torch.nn.functional.mse_loss(gen_logits_augself[aug], +self.margin + gen_labels_augself[aug])
+                        loss_Gaugself -= torch.nn.functional.mse_loss(gen_logits_augself[aug], -self.margin - gen_labels_augself[aug])
             with torch.autograd.profiler.record_function('Gmain_backward'):
-                (loss_Gmain.mean() + loss_Gaugself * lambda_G).mul(gain).backward()
+                (loss_Gmain.mean() + loss_Gaugself * self.G_augself).mul(gain).backward()
 
         # Gpl: Apply path length regularization.
         if do_Gpl:
@@ -116,9 +118,9 @@ class StyleGAN2Loss(Loss):
                 loss_Dgen = torch.nn.functional.softplus(gen_logits) # -log(1 - sigmoid(gen_logits))
                 for aug in self.D.augself.split(','):
                     if aug in AUGMENT_TPS:
-                        loss_Dgen_augself += torch.nn.functional.mse_loss(gen_logits_augself[aug], -1 - gen_labels_augself[aug])
+                        loss_Dgen_augself += torch.nn.functional.mse_loss(gen_logits_augself[aug], -self.margin - gen_labels_augself[aug])
             with torch.autograd.profiler.record_function('Dgen_backward'):
-                (loss_Dgen.mean() + loss_Dgen_augself * lambda_D).mul(gain).backward()
+                (loss_Dgen.mean() + loss_Dgen_augself * self.D_augself).mul(gain).backward()
 
         # Dmain: Maximize logits for real images.
         # Dr1: Apply R1 regularization.
@@ -137,7 +139,7 @@ class StyleGAN2Loss(Loss):
                     training_stats.report('Loss/D/loss', loss_Dgen + loss_Dreal)
                     for aug in self.D.augself.split(','):
                         if aug in AUGMENT_TPS:
-                            loss_Dreal_augself += torch.nn.functional.mse_loss(real_logits_augself[aug], +1 + real_logits_augself[aug])
+                            loss_Dreal_augself += torch.nn.functional.mse_loss(real_logits_augself[aug], +self.margin + real_logits_augself[aug])
 
                 loss_Dr1 = 0
                 if do_Dr1:
@@ -149,6 +151,6 @@ class StyleGAN2Loss(Loss):
                     training_stats.report('Loss/D/reg', loss_Dr1)
 
             with torch.autograd.profiler.record_function(name + '_backward'):
-                ((real_logits * 0 + loss_Dreal + loss_Dr1).mean() + loss_Dreal_augself * lambda_D).mul(gain).backward()
+                ((real_logits * 0 + loss_Dreal + loss_Dr1).mean() + loss_Dreal_augself * self.D_augself).mul(gain).backward()
 
 #----------------------------------------------------------------------------

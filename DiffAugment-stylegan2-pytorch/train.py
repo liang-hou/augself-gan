@@ -65,6 +65,12 @@ def setup_training_loop_kwargs(
     allow_tf32 = None, # Allow PyTorch to use TF32 for matmul and convolutions: <bool>, default = False
     nobench    = None, # Disable cuDNN benchmarking: <bool>, default = False
     workers    = None, # Override number of DataLoader workers: <int>, default = 3
+
+    # Augmentation-Aware Self-Supervision
+    augself    = None,
+    d_augself  = None,
+    g_augself  = None,
+    margin     = None,
 ):
     args = dnnlib.EasyDict()
 
@@ -371,6 +377,26 @@ def setup_training_loop_kwargs(
             raise UserError('--workers must be at least 1')
         args.data_loader_kwargs.num_workers = workers
 
+    # --------------------------------------------------------------------------
+    # Augmentation-Aware Self-Supervision: augself, d_augself, g_augself, margin
+    # --------------------------------------------------------------------------
+    if augself:
+        assert isinstance(augself, str)
+        args.D_kwargs.augself = augself
+        desc += '-{}'.format(augself.replace(',', '+'))
+    if d_augself:
+        assert isinstance(d_augself, float)
+        desc += f'-d{d_augself:g}'
+        args.loss_kwargs.D_augself = d_augself
+    if g_augself:
+        assert isinstance(g_augself, float)
+        desc += f'-g{g_augself:g}'
+        args.loss_kwargs.G_augself = g_augself
+    if margin:
+        assert isinstance(margin, float)
+        desc += f'-m{margin:g}'
+        args.loss_kwargs.margin = margin
+
     return desc, args
 
 #----------------------------------------------------------------------------
@@ -450,6 +476,12 @@ class CommaSeparatedList(click.ParamType):
 @click.option('--nobench', help='Disable cuDNN benchmarking', type=bool, metavar='BOOL')
 @click.option('--allow-tf32', help='Allow PyTorch to use TF32 internally', type=bool, metavar='BOOL')
 @click.option('--workers', help='Override number of DataLoader workers', type=int, metavar='INT')
+
+#
+@click.option('--augself', help='Comma-separated list of AugSelf [default: color,translation,cutout]', type=str)
+@click.option('--d_augself', help='Weight for AugSelf of D', type=float)
+@click.option('--g_augself', help='Weight for AugSelf of G', type=float)
+@click.option('--margin', help='Margin for AugSelf Loss', type=float)
 
 def main(ctx, outdir, dry_run, **config_kwargs):
     """Train a GAN using the techniques described in the paper

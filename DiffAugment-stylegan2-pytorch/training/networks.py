@@ -720,9 +720,9 @@ class Discriminator(torch.nn.Module):
         if c_dim > 0:
             self.mapping = MappingNetwork(z_dim=0, c_dim=c_dim, w_dim=cmap_dim, num_ws=None, w_avg_beta=None, **mapping_kwargs)
         self.b4 = DiscriminatorEpilogue(channels_dict[4], cmap_dim=cmap_dim, resolution=4, **epilogue_kwargs, **common_kwargs)
-        self.augself = 'color,translation,cutout'
+        self.augself = augself
         self.out_augself = {}
-        for aug in self.augself.split(','):
+        for aug in filter(None, self.augself.split(',')):
             if aug in AUGMENT_DMS:
                 self.out_augself[aug] = DiscriminatorEpilogue(channels_dict[4], cmap_dim=0, out_dimension=AUGMENT_DMS[aug], resolution=4, **epilogue_kwargs, **common_kwargs)
         self.out_augself = torch.nn.ModuleDict(self.out_augself)
@@ -741,10 +741,8 @@ class Discriminator(torch.nn.Module):
             cmap = self.mapping(None, c)
         x_b4 = self.b4(x, img, cmap)
         x_augself = {}
-        for aug in self.augself.split(','):
-            if x_o is None:
-                break
-            if aug in AUGMENT_DMS:
+        for aug in filter(None, self.augself.split(',')):
+            if aug in AUGMENT_DMS and x_o is not None:
                 x_augself[aug] = self.out_augself[aug](x - x_o, None, cmap)
 
         return x_b4, x_augself
