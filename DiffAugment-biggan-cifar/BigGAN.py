@@ -385,6 +385,14 @@ class Discriminator(nn.Module):
                     self.out_augself[aug] = nn.utils.spectral_norm(nn.Bilinear(self.arch['out_channels'][-1], self.arch['out_channels'][-1], out_dim))
                 else:
                     self.out_augself[aug] = nn.Bilinear(self.arch['out_channels'][-1], self.arch['out_channels'][-1], out_dim)
+            elif self.out_form == 'concat-linear':
+                self.out_augself[aug] = self.which_linear(self.arch['out_channels'][-1] * 2, out_dim)
+            elif self.out_form == 'concat-MLP':
+                self.out_augself[aug] = nn.Sequential(
+                    self.which_linear(self.arch['out_channels'][-1] * 2, self.arch['out_channels'][-1]),
+                    nn.ReLU(),
+                    self.which_linear(self.arch['out_channels'][-1], out_dim)
+                )
         self.out_augself = nn.ModuleDict(self.out_augself)
 
         # Initialize weights
@@ -447,6 +455,8 @@ class Discriminator(nn.Module):
                 out_augself[aug] = self.out_augself[aug](h - h_o)
             elif self.out_form == 'bilinear':
                 out_augself[aug] = self.out_augself[aug](h, h_o)
+            elif self.out_form in {'concat-linear', 'concat-MLP'}:
+                out_augself[aug] = self.out_augself[aug](torch.cat([h, h_o], -1))
         return out, out_augself
 
 
