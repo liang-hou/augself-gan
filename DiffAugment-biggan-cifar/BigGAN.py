@@ -385,6 +385,12 @@ class Discriminator(nn.Module):
                     self.out_augself[aug] = nn.utils.spectral_norm(nn.Bilinear(self.arch['out_channels'][-1], self.arch['out_channels'][-1], out_dim))
                 else:
                     self.out_augself[aug] = nn.Bilinear(self.arch['out_channels'][-1], self.arch['out_channels'][-1], out_dim)
+            elif self.out_form == 'MLP':
+                self.out_augself[aug] = nn.Sequential(
+                    self.which_linear(self.arch['out_channels'][-1], self.arch['out_channels'][-1]),
+                    nn.ReLU(),
+                    self.which_linear(self.arch['out_channels'][-1], out_dim)
+                )
             elif self.out_form == 'concat-linear':
                 self.out_augself[aug] = self.which_linear(self.arch['out_channels'][-1] * 2, out_dim)
             elif self.out_form == 'concat-MLP':
@@ -451,7 +457,7 @@ class Discriminator(nn.Module):
         out = out + torch.sum(self.embed(y) * h, 1, keepdim=True)
         out_augself = {}
         for aug in filter(None, self.augself.split(',')):
-            if self.out_form == 'linear':
+            if self.out_form in {'linear', 'MLP'}:
                 out_augself[aug] = self.out_augself[aug](h - h_o)
             elif self.out_form == 'bilinear':
                 out_augself[aug] = self.out_augself[aug](h, h_o)
