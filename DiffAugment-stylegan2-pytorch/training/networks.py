@@ -723,8 +723,7 @@ class Discriminator(torch.nn.Module):
         self.augself = augself
         self.out_augself = {}
         for aug in filter(None, self.augself.split(',')):
-            if aug in AUGMENT_DMS:
-                self.out_augself[aug] = DiscriminatorEpilogue(channels_dict[4], cmap_dim=0, out_dimension=AUGMENT_DMS[aug], resolution=4, **epilogue_kwargs, **common_kwargs)
+            self.out_augself[aug] = DiscriminatorEpilogue(channels_dict[4], cmap_dim=0, out_dimension=AUGMENT_DMS[aug], resolution=4, **epilogue_kwargs, **common_kwargs)
         self.out_augself = torch.nn.ModuleDict(self.out_augself)
 
     def forward(self, img, c, img_o=None, **block_kwargs):

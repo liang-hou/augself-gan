@@ -61,8 +61,8 @@ class StyleGAN2Loss(Loss):
         if self.augment_pipe is not None:
             img = self.augment_pipe(img)
         with misc.ddp_sync(self.D, sync):
-            logits, logits_augself = self.D(img=img, img_o=img_o, c=c)
-        return logits, logits_augself, labels_augself
+            logits, preds_augself = self.D(img=img, img_o=img_o, c=c)
+        return logits, preds_augself, labels_augself
 
     def accumulate_gradients(self, phase, real_img, real_c, gen_z, gen_c, sync, gain):
         assert phase in ['Gmain', 'Greg', 'Gboth', 'Dmain', 'Dreg', 'Dboth']
@@ -75,16 +75,15 @@ class StyleGAN2Loss(Loss):
         if do_Gmain:
             with torch.autograd.profiler.record_function('Gmain_forward'):
                 gen_img, _gen_ws = self.run_G(gen_z, gen_c, sync=(sync and not do_Gpl)) # May get synced by Gpl.
-                gen_logits, gen_logits_augself, gen_labels_augself = self.run_D(gen_img, gen_c, sync=False)
+                gen_logits, gen_preds_augself, gen_labels_augself = self.run_D(gen_img, gen_c, sync=False)
                 training_stats.report('Loss/scores/fake', gen_logits)
                 training_stats.report('Loss/signs/fake', gen_logits.sign())
                 loss_Gmain = torch.nn.functional.softplus(-gen_logits) # -log(sigmoid(gen_logits))
                 training_stats.report('Loss/G/loss', loss_Gmain)
                 loss_Gaugself = 0
-                for aug in self.D.augself.split(','):
-                    if aug in AUGMENT_TPS:
-                        loss_Gaugself += torch.nn.functional.mse_loss(gen_logits_augself[aug], +self.margin + gen_labels_augself[aug])
-                        loss_Gaugself -= torch.nn.functional.mse_loss(gen_logits_augself[aug], -self.margin - gen_labels_augself[aug])
+                for aug in filter(None, self.D.augself.split(',')):
+                    loss_Gaugself += torch.nn.functional.mse_loss(gen_preds_augself[aug], +self.margin + gen_labels_augself[aug])
+                    loss_Gaugself -= torch.nn.functional.mse_loss(gen_preds_augself[aug], -self.margin - gen_labels_augself[aug])
             with torch.autograd.profiler.record_function('Gmain_backward'):
                 (loss_Gmain.mean() + loss_Gaugself * self.G_augself).mul(gain).backward()
 
@@ -112,13 +111,12 @@ class StyleGAN2Loss(Loss):
         if do_Dmain:
             with torch.autograd.profiler.record_function('Dgen_forward'):
                 gen_img, _gen_ws = self.run_G(gen_z, gen_c, sync=False)
-                gen_logits, gen_logits_augself, gen_labels_augself = self.run_D(gen_img, gen_c, sync=False) # Gets synced by loss_Dreal.
+                gen_logits, gen_preds_augself, gen_labels_augself = self.run_D(gen_img, gen_c, sync=False) # Gets synced by loss_Dreal.
                 training_stats.report('Loss/scores/fake', gen_logits)
                 training_stats.report('Loss/signs/fake', gen_logits.sign())
                 loss_Dgen = torch.nn.functional.softplus(gen_logits) # -log(1 - sigmoid(gen_logits))
-                for aug in self.D.augself.split(','):
-                    if aug in AUGMENT_TPS:
-                        loss_Dgen_augself += torch.nn.functional.mse_loss(gen_logits_augself[aug], -self.margin - gen_labels_augself[aug])
+                for aug in filter(None, self.D.augself.split(',')):
+                    loss_Dgen_augself += torch.nn.functional.mse_loss(gen_preds_augself[aug], -self.margin - gen_labels_augself[aug])
             with torch.autograd.profiler.record_function('Dgen_backward'):
                 (loss_Dgen.mean() + loss_Dgen_augself * self.D_augself).mul(gain).backward()
 
@@ -128,7 +126,7 @@ class StyleGAN2Loss(Loss):
             name = 'Dreal_Dr1' if do_Dmain and do_Dr1 else 'Dreal' if do_Dmain else 'Dr1'
             with torch.autograd.profiler.record_function(name + '_forward'):
                 real_img_tmp = real_img.detach().requires_grad_(do_Dr1)
-                real_logits, real_logits_augself, real_logits_augself = self.run_D(real_img_tmp, real_c, sync=sync)
+                real_logits, real_preds_augself, real_labels_augself = self.run_D(real_img_tmp, real_c, sync=sync)
                 training_stats.report('Loss/scores/real', real_logits)
                 training_stats.report('Loss/signs/real', real_logits.sign())
 
@@ -137,9 +135,8 @@ class StyleGAN2Loss(Loss):
                 if do_Dmain:
                     loss_Dreal = torch.nn.functional.softplus(-real_logits) # -log(sigmoid(real_logits))
                     training_stats.report('Loss/D/loss', loss_Dgen + loss_Dreal)
-                    for aug in self.D.augself.split(','):
-                        if aug in AUGMENT_TPS:
-                            loss_Dreal_augself += torch.nn.functional.mse_loss(real_logits_augself[aug], +self.margin + real_logits_augself[aug])
+                    for aug in filter(None, self.D.augself.split(',')):
+                        loss_Dreal_augself += torch.nn.functional.mse_loss(real_preds_augself[aug], +self.margin + real_labels_augself[aug])
 
                 loss_Dr1 = 0
                 if do_Dr1:
