@@ -670,18 +670,18 @@ class DiscriminatorEpilogue(torch.nn.Module):
             x = self.mbstd(x)
         x = self.conv(x)
         x = self.fc(x.flatten(1))
+        x_augself = {}
         if x_o is not None:
             if self.mbstd is not None:
                 x_o = self.mbstd(x_o)
             x_o = self.conv(x_o)
             x_o = self.fc(x_o.flatten(1))
-        x_augself = {}
-        if 'color' in self.augself.split(','):
-            x_augself['color'] = self.out_color(x - x_o)
-        if 'translation' in self.augself.split(','):
-            x_augself['translation'] = self.out_translation(x - x_o)
-        if 'cutout' in self.augself.split(','):
-            x_augself['cutout'] = self.out_cutout(x - x_o)
+            if 'color' in self.augself.split(','):
+                x_augself['color'] = self.out_color(x - x_o)
+            if 'translation' in self.augself.split(','):
+                x_augself['translation'] = self.out_translation(x - x_o)
+            if 'cutout' in self.augself.split(','):
+                x_augself['cutout'] = self.out_cutout(x - x_o)
         x = self.out(x)
 
         # Conditioning.
