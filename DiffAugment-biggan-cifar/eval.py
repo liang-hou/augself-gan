@@ -65,7 +65,7 @@ def run_eval_D(config):
     # G = model.Generator(**config).cuda()
     D_batch_size = (config['batch_size'] * config['num_D_steps'] * config['num_D_accumulations'])
     D = model.Discriminator(**config).cuda()
-    D.load_state_dict(torch.load(dnnlib.util.open_file_or_url(config['network'])))
+    D.load_state_dict(torch.load(dnnlib.util.open_file_or_url(config['network'])), strict=False)
     D.eval()
 
     acc_list = []
