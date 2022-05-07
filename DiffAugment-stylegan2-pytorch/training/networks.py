@@ -642,10 +642,9 @@ class DiscriminatorEpilogue(torch.nn.Module):
         self.fc = FullyConnectedLayer(in_channels * (resolution ** 2), in_channels, activation=activation)
         self.out = FullyConnectedLayer(in_channels, 1 if cmap_dim == 0 else cmap_dim)
         self.augself = augself
-        self.out_augself = {}
-        for aug in filter(None, self.augself.split(',')):
-            self.out_augself[aug] = FullyConnectedLayer(in_channels, AUGMENT_DMS[aug])
-        self.out_augself = torch.nn.ModuleDict(self.out_augself)
+        self.out_color = FullyConnectedLayer(in_channels, 3)
+        self.out_translation = FullyConnectedLayer(in_channels, 2)
+        self.out_cutout = FullyConnectedLayer(in_channels, 2)
 
     def forward(self, x, img, cmap, x_o=None, img_o=None, force_fp32=False):
         misc.assert_shape(x, [None, self.in_channels, self.resolution, self.resolution]) # [NCHW]
@@ -677,9 +676,12 @@ class DiscriminatorEpilogue(torch.nn.Module):
             x_o = self.conv(x_o)
             x_o = self.fc(x_o.flatten(1))
         x_augself = {}
-        for aug in filter(None, x_augself.split(',')):
-            if x_o is not None:
-                x_augself[aug] = self.out_augself[aug](x - x_o)
+        if 'color' in self.augself.split(','):
+            x_augself['color'] = self.out_color(x - x_o)
+        if 'translation' in self.augself.split(','):
+            x_augself['translation'] = self.out_translation(x - x_o)
+        if 'cutout' in self.augself.split(','):
+            x_augself['cutout'] = self.out_cutout(x - x_o)
         x = self.out(x)
 
         # Conditioning.
@@ -736,6 +738,7 @@ class Discriminator(torch.nn.Module):
             cur_layer_idx += block.num_layers
         if c_dim > 0:
             self.mapping = MappingNetwork(z_dim=0, c_dim=c_dim, w_dim=cmap_dim, num_ws=None, w_avg_beta=None, **mapping_kwargs)
+        self.augself = augself
         self.b4 = DiscriminatorEpilogue(channels_dict[4], cmap_dim=cmap_dim, resolution=4, augself=augself, **epilogue_kwargs, **common_kwargs)
 
     def forward(self, img, c, img_o=None, **block_kwargs):
