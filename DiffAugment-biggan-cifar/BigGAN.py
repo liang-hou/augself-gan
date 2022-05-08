@@ -374,11 +374,18 @@ class Discriminator(nn.Module):
         self.augself = augself
         self.selfsup = selfsup
         self.out_augself = {}
-        for aug in self.augself.split(','):
+        for aug in filter(None, self.augself.split(',')):
             out_dim = AUGMENT_DMS[aug] * 2 if AUGMENT_TPS[aug] == 'classification' and self.selfsup in {'la', 'la-'} else \
                       AUGMENT_DMS[aug] + 1 if AUGMENT_TPS[aug] == 'classification' and self.selfsup in {'ms', 'ms-'} else \
                       AUGMENT_DMS[aug]
-            if self.out_form == 'linear':
+            if self.out_form == 'cc-linear':
+                self.out_augself[aug] = self.which_linear(self.arch['out_channels'][-1] * 2, out_dim)
+            elif self.out_form == 'cc-bilinear':
+                if self.D_param == 'SN':
+                    self.out_augself[aug] = nn.utils.spectral_norm(nn.Bilinear(self.arch['out_channels'][-1], self.arch['out_channels'][-1], out_dim))
+                else:
+                    self.out_augself[aug] = nn.Bilinear(self.arch['out_channels'][-1], self.arch['out_channels'][-1], out_dim)
+            elif self.out_form == 'linear':
                 self.out_augself[aug] = self.which_linear(self.arch['out_channels'][-1], out_dim)
             elif self.out_form =='bilinear':
                 if self.D_param == 'SN':
@@ -457,7 +464,11 @@ class Discriminator(nn.Module):
         out = out + torch.sum(self.embed(y) * h, 1, keepdim=True)
         out_augself = {}
         for aug in filter(None, self.augself.split(',')):
-            if self.out_form in {'linear', 'MLP'}:
+            if self.out_form == 'cc-linear':
+                out_augself[aug] = self.out_augself[aug](torch.cat([h - h_o, self.embed(y)], 1))
+            elif self.out_form == 'cc-bilinear':
+                out_augself[aug] = self.out_augself[aug](h - h_o, self.embed(y))
+            elif self.out_form in {'linear', 'MLP'}:
                 out_augself[aug] = self.out_augself[aug](h - h_o)
             elif self.out_form == 'bilinear':
                 out_augself[aug] = self.out_augself[aug](h, h_o)
