@@ -391,6 +391,12 @@ class Discriminator(nn.Module):
                     nn.ReLU(),
                     self.which_linear(self.arch['out_channels'][-1], out_dim)
                 )
+            elif self.out_form == 'cc-concat-linear':
+                self.out_augself[aug] = nn.Sequential(
+                    self.which_linear(self.arch['out_channels'][-1] * 3, self.arch['out_channels'][-1]),
+                    nn.ReLU(),
+                    self.which_linear(self.arch['out_channels'][-1], out_dim)
+                )
             elif self.out_form == 'linear':
                 self.out_augself[aug] = self.which_linear(self.arch['out_channels'][-1], out_dim)
             elif self.out_form =='bilinear':
@@ -474,6 +480,8 @@ class Discriminator(nn.Module):
                 out_augself[aug] = self.out_augself[aug](torch.cat([h - h_o, self.embed(y)], 1))
             elif self.out_form == 'cc-bilinear':
                 out_augself[aug] = self.out_augself[aug](h - h_o, self.embed(y))
+            elif self.out_form == 'cc-concat-linear':
+                out_augself[aug] = self.out_augself[aug](torch.cat([h, h_o, self.embed(y)], -1))
             elif self.out_form in {'linear', 'MLP'}:
                 out_augself[aug] = self.out_augself[aug](h - h_o)
             elif self.out_form == 'bilinear':
