@@ -650,7 +650,7 @@ class DiscriminatorEpilogue(torch.nn.Module):
             if 'fc' in self.out_form:
                 self.fc_augself[aug] = FullyConnectedLayer(in_channels * (resolution ** 2), in_channels, activation=activation)
             if 'conv' in self.out_form:
-                self.conv_augself = Conv2dLayer(in_channels + mbstd_num_channels, in_channels, kernel_size=3, activation=activation, conv_clamp=conv_clamp)
+                self.conv_augself[aug] = Conv2dLayer(in_channels + mbstd_num_channels, in_channels, kernel_size=3, activation=activation, conv_clamp=conv_clamp)
         self.out_augself = torch.nn.ModuleDict(self.out_augself)
         if 'fc' in self.out_form:
             self.fc_augself = torch.nn.ModuleDict(self.fc_augself)
