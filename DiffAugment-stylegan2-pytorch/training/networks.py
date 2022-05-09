@@ -626,6 +626,7 @@ class DiscriminatorEpilogue(torch.nn.Module):
         activation          = 'lrelu',  # Activation function: 'relu', 'lrelu', etc.
         conv_clamp          = None,     # Clamp the output of convolution layers to +-X, None = disable clamping.
         augself             = '',
+        out_form            = 'out',
     ):
         assert architecture in ['orig', 'skip', 'resnet']
         super().__init__()
@@ -642,9 +643,19 @@ class DiscriminatorEpilogue(torch.nn.Module):
         self.fc = FullyConnectedLayer(in_channels * (resolution ** 2), in_channels, activation=activation)
         self.out = FullyConnectedLayer(in_channels, 1 if cmap_dim == 0 else cmap_dim)
         self.augself = augself
-        self.out_color = FullyConnectedLayer(in_channels, 3)
-        self.out_translation = FullyConnectedLayer(in_channels, 2)
-        self.out_cutout = FullyConnectedLayer(in_channels, 2)
+        self.out_augself = {}
+        self.out_form = out_form
+        for aug in filter(None, self.augself.split(',')):
+            self.out_augself[aug] = FullyConnectedLayer(in_channels, AUGMENT_DMS[aug])
+            if 'fc' in self.out_form:
+                self.fc_augself[aug] = FullyConnectedLayer(in_channels * (resolution ** 2), in_channels, activation=activation)
+            if 'conv' in self.out_form:
+                self.conv_augself = Conv2dLayer(in_channels + mbstd_num_channels, in_channels, kernel_size=3, activation=activation, conv_clamp=conv_clamp)
+        self.out_augself = torch.nn.ModuleDict(self.out_augself)
+        if 'fc' in self.out_form:
+            self.fc_augself = torch.nn.ModuleDict(self.fc_augself)
+        if 'conv' in self.out_form:
+            self.conv_augself = torch.nn.ModuleDict(self.conv_augself)
 
     def forward(self, x, img, cmap, x_o=None, img_o=None, force_fp32=False):
         misc.assert_shape(x, [None, self.in_channels, self.resolution, self.resolution]) # [NCHW]
@@ -668,20 +679,23 @@ class DiscriminatorEpilogue(torch.nn.Module):
         # Main layers.
         if self.mbstd is not None:
             x = self.mbstd(x)
-        x = self.conv(x)
-        x = self.fc(x.flatten(1))
-        x_augself = {}
-        if x_o is not None:
-            if self.mbstd is not None:
+            if x_o is not None:
                 x_o = self.mbstd(x_o)
+        x_augself = {}
+        if x_o is not None and 'conv' in self.out_form:
+            for aug in filter(None, self.augself.split(',')):
+                x_augself[aug] = self.out_augself[aug](self.fc_augself[aug](self.conv_augself[aug](x - x_o).flatten(1)))
+        x = self.conv(x)
+        if x_o is not None and 'conv' not in self.out_form:
             x_o = self.conv(x_o)
+        if x_o is not None and 'conv' not in self.out_form and 'fc' in self.out_form:
+            for aug in filter(None, self.augself.split(',')):
+                x_augself[aug] = self.out_augself[aug](self.fc_augself[aug]((x - x_o).flatten(1)))
+        x = self.fc(x.flatten(1))
+        if x_o is not None and 'conv' not in self.out_form and 'fc' not in self.out_form:
             x_o = self.fc(x_o.flatten(1))
-            if 'color' in self.augself.split(','):
-                x_augself['color'] = self.out_color(x - x_o)
-            if 'translation' in self.augself.split(','):
-                x_augself['translation'] = self.out_translation(x - x_o)
-            if 'cutout' in self.augself.split(','):
-                x_augself['cutout'] = self.out_cutout(x - x_o)
+            for aug in filter(None, self.augself.split(',')):
+                x_augself[aug] = self.out_augself[aug](x - x_o)
         x = self.out(x)
 
         # Conditioning.
