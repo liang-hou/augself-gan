@@ -643,6 +643,8 @@ class DiscriminatorEpilogue(torch.nn.Module):
         self.fc = FullyConnectedLayer(in_channels * (resolution ** 2), in_channels, activation=activation)
         self.out = FullyConnectedLayer(in_channels, 1 if cmap_dim == 0 else cmap_dim)
         self.augself = augself
+        self.conv_augself = {}
+        self.fc_augself = {}
         self.out_augself = {}
         self.out_form = out_form
         for aug in filter(None, self.augself.split(',')):
@@ -652,10 +654,8 @@ class DiscriminatorEpilogue(torch.nn.Module):
             if 'conv' in self.out_form:
                 self.conv_augself[aug] = Conv2dLayer(in_channels + mbstd_num_channels, in_channels, kernel_size=3, activation=activation, conv_clamp=conv_clamp)
         self.out_augself = torch.nn.ModuleDict(self.out_augself)
-        if 'fc' in self.out_form:
-            self.fc_augself = torch.nn.ModuleDict(self.fc_augself)
-        if 'conv' in self.out_form:
-            self.conv_augself = torch.nn.ModuleDict(self.conv_augself)
+        self.fc_augself = torch.nn.ModuleDict(self.fc_augself)
+        self.conv_augself = torch.nn.ModuleDict(self.conv_augself)
 
     def forward(self, x, img, cmap, x_o=None, img_o=None, force_fp32=False):
         misc.assert_shape(x, [None, self.in_channels, self.resolution, self.resolution]) # [NCHW]
