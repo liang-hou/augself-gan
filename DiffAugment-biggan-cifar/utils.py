@@ -383,7 +383,7 @@ def prepare_parser():
         '--network', type=str, default=None,
         help='Which network to evaluate')
     parser.add_argument(
-        '--repeat', type=int, default=1,
+        '--repeat', type=int, default=5,
         help='Number of repeats of evaluation runs')
 
     ### Log stuff ###
