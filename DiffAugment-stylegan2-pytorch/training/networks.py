@@ -626,7 +626,7 @@ class DiscriminatorEpilogue(torch.nn.Module):
         activation          = 'lrelu',  # Activation function: 'relu', 'lrelu', etc.
         conv_clamp          = None,     # Clamp the output of convolution layers to +-X, None = disable clamping.
         augself             = '',
-        out_form            = 'out',
+        out_form            = '',
     ):
         assert architecture in ['orig', 'skip', 'resnet']
         super().__init__()
@@ -724,6 +724,7 @@ class Discriminator(torch.nn.Module):
         mapping_kwargs      = {},       # Arguments for MappingNetwork.
         epilogue_kwargs     = {},       # Arguments for DiscriminatorEpilogue.
         augself             = '',       # Augmentation-aware self-supervision.
+        out_form            = '',       # Output layer for predicting self-supervision
     ):
         super().__init__()
         self.c_dim = c_dim
@@ -753,7 +754,7 @@ class Discriminator(torch.nn.Module):
         if c_dim > 0:
             self.mapping = MappingNetwork(z_dim=0, c_dim=c_dim, w_dim=cmap_dim, num_ws=None, w_avg_beta=None, **mapping_kwargs)
         self.augself = augself
-        self.b4 = DiscriminatorEpilogue(channels_dict[4], cmap_dim=cmap_dim, resolution=4, augself=augself, **epilogue_kwargs, **common_kwargs)
+        self.b4 = DiscriminatorEpilogue(channels_dict[4], cmap_dim=cmap_dim, resolution=4, augself=augself, out_form=out_form, **epilogue_kwargs, **common_kwargs)
 
     def forward(self, img, c, img_o=None, **block_kwargs):
         x = None
