@@ -1,12 +1,12 @@
 #!/bin/bash
-python train.py --experiment_name la-linear-margin0-color+translation+cutout-d1g1-DiffAugment-biggan-cifar10-0.2 --DiffAugment color,translation,cutout \
---augself color,translation,cutout --selfsup la --D_out_form linear --margin 0.0 --D_augself 1.0 --G_augself 1.0 \
+python train.py --experiment_name ss-color+translation+cutout-linear-sub-d1g1-DiffAugment-biggan-cifar100-0.2 --DiffAugment color,translation,cutout \
+--SS_augs color,translation,cutout --SS_arch linear --SS_fuse sub --SS_label same --SS_margin 0.0 --SS_D_data real --SS_G_loss ns --SS_D_weight 1.0 --SS_G_weight 1.0 \
 --mirror_augment --use_multiepoch_sampler \
 --which_best FID --num_inception_images 10000 \
 --shuffle --batch_size 50 --parallel \
 --num_G_accumulations 1 --num_D_accumulations 1 --num_epochs 5000 --num_samples 10000 \
 --num_D_steps 4 --G_lr 2e-4 --D_lr 2e-4 \
---dataset C10 \
+--dataset C100 \
 --G_ortho 0.0 \
 --G_attn 0 --D_attn 0 \
 --G_init N02 --D_init N02 \

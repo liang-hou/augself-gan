@@ -1,4 +1,4 @@
-from DiffAugment_pytorch import DiffAugment, AUGMENT_DMS, AUGMENT_TPS
+from DiffAugment_pytorch import DiffAugment, AUGMENT_DIM
 import numpy as np
 import math
 import functools
@@ -294,7 +294,8 @@ class Discriminator(nn.Module):
                  num_D_SVs=1, num_D_SV_itrs=1, D_activation=nn.ReLU(inplace=False),
                  D_lr=2e-4, D_B1=0.0, D_B2=0.999, adam_eps=1e-8,
                  SN_eps=1e-12, output_dim=1, D_mixed_precision=False, D_fp16=False,
-                 D_init='ortho', skip_init=False, D_param='SN', augself='', selfsup='', D_out_form='linear', **kwargs):
+                 D_init='ortho', skip_init=False, D_param='SN',
+                 SS_augs='', SS_fuse='sub', SS_arch='linear', **kwargs):
         super(Discriminator, self).__init__()
         # Width multiplier
         self.ch = D_ch
@@ -369,56 +370,32 @@ class Discriminator(nn.Module):
         # Embedding for projection discrimination
         self.embed = self.which_embedding(
             self.n_classes, self.arch['out_channels'][-1])
-        
-        self.out_form = D_out_form
-        self.augself = augself
-        self.selfsup = selfsup
-        self.out_augself = {}
-        for aug in filter(None, self.augself.split(',')):
-            out_dim = AUGMENT_DMS[aug] * 2 if AUGMENT_TPS[aug] == 'classification' and self.selfsup in {'la', 'la-'} else \
-                      AUGMENT_DMS[aug] + 1 if AUGMENT_TPS[aug] == 'classification' and self.selfsup in {'ms', 'ms-'} else \
-                      AUGMENT_DMS[aug]
-            if self.out_form == 'cc-linear':
-                self.out_augself[aug] = self.which_linear(self.arch['out_channels'][-1] * 2, out_dim)
-            elif self.out_form == 'cc-bilinear':
+
+        self.SS_augs = SS_augs
+        self.SS_fuse = SS_fuse
+        self.SS_arch = SS_arch
+        self.out_SS = {}
+        for aug in filter(None, self.SS_augs.split(',')):
+            if self.SS_fuse == 'cat' and self.SS_fuse != 'bilinear':
+                in_dim = self.arch['out_channels'][-1] * 2
+            else:
+                in_dim = self.arch['out_channels'][-1]
+            out_dim = AUGMENT_DIM[aug]
+            hid_dim = max(in_dim, out_dim)
+            if self.SS_arch == 'linear':
+                self.out_SS[aug] = self.which_linear(in_dim, out_dim)
+            elif self.SS_arch =='bilinear':
                 if self.D_param == 'SN':
-                    self.out_augself[aug] = nn.utils.spectral_norm(nn.Bilinear(self.arch['out_channels'][-1], self.arch['out_channels'][-1], out_dim))
+                    self.out_SS[aug] = nn.utils.spectral_norm(nn.Bilinear(in_dim, in_dim, out_dim))
                 else:
-                    self.out_augself[aug] = nn.Bilinear(self.arch['out_channels'][-1], self.arch['out_channels'][-1], out_dim)
-            elif self.out_form == 'cc-MLP':
-                self.out_augself[aug] = nn.Sequential(
-                    self.which_linear(self.arch['out_channels'][-1] * 2, self.arch['out_channels'][-1]),
+                    self.out_SS[aug] = nn.Bilinear(in_dim, in_dim, out_dim)
+            elif self.SS_arch == 'MLP':
+                self.out_SS[aug] = nn.Sequential(
+                    self.which_linear(in_dim, hid_dim),
                     nn.ReLU(),
-                    self.which_linear(self.arch['out_channels'][-1], out_dim)
+                    self.which_linear(hid_dim, out_dim)
                 )
-            elif self.out_form == 'cc-concat-linear':
-                self.out_augself[aug] = nn.Sequential(
-                    self.which_linear(self.arch['out_channels'][-1] * 3, self.arch['out_channels'][-1]),
-                    nn.ReLU(),
-                    self.which_linear(self.arch['out_channels'][-1], out_dim)
-                )
-            elif self.out_form == 'linear':
-                self.out_augself[aug] = self.which_linear(self.arch['out_channels'][-1], out_dim)
-            elif self.out_form =='bilinear':
-                if self.D_param == 'SN':
-                    self.out_augself[aug] = nn.utils.spectral_norm(nn.Bilinear(self.arch['out_channels'][-1], self.arch['out_channels'][-1], out_dim))
-                else:
-                    self.out_augself[aug] = nn.Bilinear(self.arch['out_channels'][-1], self.arch['out_channels'][-1], out_dim)
-            elif self.out_form == 'MLP':
-                self.out_augself[aug] = nn.Sequential(
-                    self.which_linear(self.arch['out_channels'][-1], self.arch['out_channels'][-1]),
-                    nn.ReLU(),
-                    self.which_linear(self.arch['out_channels'][-1], out_dim)
-                )
-            elif self.out_form == 'concat-linear':
-                self.out_augself[aug] = self.which_linear(self.arch['out_channels'][-1] * 2, out_dim)
-            elif self.out_form == 'concat-MLP':
-                self.out_augself[aug] = nn.Sequential(
-                    self.which_linear(self.arch['out_channels'][-1] * 2, self.arch['out_channels'][-1]),
-                    nn.ReLU(),
-                    self.which_linear(self.arch['out_channels'][-1], out_dim)
-                )
-        self.out_augself = nn.ModuleDict(self.out_augself)
+        self.out_SS = nn.ModuleDict(self.out_SS)
 
         # Initialize weights
         if not skip_init:
@@ -474,21 +451,16 @@ class Discriminator(nn.Module):
         out = self.linear(h)
         # Get projection of final featureset onto class vectors and add to evidence
         out = out + torch.sum(self.embed(y) * h, 1, keepdim=True)
-        out_augself = {}
-        for aug in filter(None, self.augself.split(',')):
-            if self.out_form in {'cc-linear', 'cc-MLP'}:
-                out_augself[aug] = self.out_augself[aug](torch.cat([h - h_o, self.embed(y)], 1))
-            elif self.out_form == 'cc-bilinear':
-                out_augself[aug] = self.out_augself[aug](h - h_o, self.embed(y))
-            elif self.out_form == 'cc-concat-linear':
-                out_augself[aug] = self.out_augself[aug](torch.cat([h, h_o, self.embed(y)], -1))
-            elif self.out_form in {'linear', 'MLP'}:
-                out_augself[aug] = self.out_augself[aug](h - h_o)
-            elif self.out_form == 'bilinear':
-                out_augself[aug] = self.out_augself[aug](h, h_o)
-            elif self.out_form in {'concat-linear', 'concat-MLP'}:
-                out_augself[aug] = self.out_augself[aug](torch.cat([h, h_o], -1))
-        return out, out_augself
+        out_SS = {}
+        for aug in filter(None, self.SS_augs.split(',')):
+            if self.SS_arch in ['linear', 'MLP']:
+                if self.SS_fuse == 'sub':
+                    out_SS[aug] = self.out_SS[aug](h - h_o)
+                elif self.SS_fuse == 'cat':
+                    out_SS[aug] = self.out_SS[aug](torch.cat([h, h_o], -1))
+            elif self.SS_arch == 'bilinear':
+                out_SS[aug] = self.out_SS[aug](h, h_o)
+        return out, out_SS
 
 
 # Parallelized G_D to minimize cross-gpu communication
@@ -519,8 +491,8 @@ class G_D(nn.Module):
             [img for img in [G_z, x] if img is not None], 0)
         D_class = torch.cat(
             [label for label in [gy, dy] if label is not None], 0)
-        D_input_orig = D_input
-        D_input, D_gts_augself = DiffAugment(D_input, policy=policy)
+        D_input_ori = D_input
+        D_input, SS_param = DiffAugment(D_input, policy=policy)
         if CR:
             if CR_augment:
                 x_CR_aug = torch.split(D_input, [G_z.shape[0], x.shape[0]])[1]
@@ -533,16 +505,16 @@ class G_D(nn.Module):
                 D_input = torch.cat([D_input, x], 0)
             D_class = torch.cat([D_class, dy], 0)
         # Get Discriminator output
-        D_out, D_out_augself = self.D(D_input, D_input_orig, D_class)
+        D_out, D_out_SS = self.D(D_input, D_input_ori, D_class)
         if G_z is None:
             return D_out
         elif x is not None:
             if CR:
                 return torch.split(D_out, [G_z.shape[0], x.shape[0], x.shape[0]])
             else:
-                return torch.split(D_out, [G_z.shape[0], x.shape[0]]), D_out_augself, D_gts_augself
+                return torch.split(D_out, [G_z.shape[0], x.shape[0]]), D_out_SS, SS_param
         else:
             if return_G_z:
                 return D_out, G_z
             else:
-                return D_out, D_out_augself, D_gts_augself
+                return D_out, D_out_SS, SS_param

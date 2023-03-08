@@ -148,24 +148,15 @@ def prepare_parser():
     parser.add_argument(
         '--CR', type=float, default=0,
         help='Consistency Regularization for GANs (default: %(default)s)')
-    parser.add_argument(
-        '--augself', type=str, default='color,translation,cutout',
-        help='Augmentation-Aware Self-Supervision Augmentation')
-    parser.add_argument(
-        '--selfsup', type=str, default='la',
-        help='Self-Supervised Learning for GAN (default: %(default)s)')
-    parser.add_argument(
-        '--D_out_form', type=str, default='linear',
-        help='Output form for Self-Supervision of D (default: %(default)s)')
-    parser.add_argument(
-        '--margin', type=float, default=1.,
-        help='Margin for the least squares loss (default: %(default)s)')
-    parser.add_argument(
-        '--D_augself', type=float, default=1.,
-        help='Augmentation-Aware Self-Supervision for D (default: %(default)s)')
-    parser.add_argument(
-        '--G_augself', type=float, default=1.,
-        help='Augmentation-Aware Self-Supervision for G (default: %(default)s)')
+    parser.add_argument('--SS_augs', type=str, default='color,translation,cutout')
+    parser.add_argument('--SS_fuse', type=str, default='sub', choices=['sub', 'cat'])
+    parser.add_argument('--SS_arch', type=str, default='linear', choices=['linear', 'bilinear', 'MLP'])
+    parser.add_argument('--SS_label', type=str, default='sym', choices=['sym', 'trans', 'same'])
+    parser.add_argument('--SS_margin', type=float, default=0.)
+    parser.add_argument('--SS_D_data', type=str, default='all', choices=['real', 'all'])
+    parser.add_argument('--SS_G_loss', type=str, default='both', choices=['sa', 'ns', 'both'])
+    parser.add_argument('--SS_D_weight', type=float, default=1.)
+    parser.add_argument('--SS_G_weight', type=float, default=1.)
 
     ### Model init stuff ###
     parser.add_argument(

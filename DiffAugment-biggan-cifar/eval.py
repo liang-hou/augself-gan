@@ -6,7 +6,7 @@ import os
 import inception_tf
 import utils
 import dnnlib
-from sklearn.linear_model import LogisticRegression
+# from sklearn.linear_model import LogisticRegression
 
 
 def run_eval(config):

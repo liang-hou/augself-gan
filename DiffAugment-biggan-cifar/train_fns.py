@@ -11,7 +11,6 @@ import numpy as np
 
 import utils
 import losses
-from DiffAugment_pytorch import AUGMENT_FNS, AUGMENT_TPS, AUGMENT_DMS
 
 
 # Dummy training function for debugging
@@ -41,48 +40,40 @@ def GAN_training_function(G, D, GD, z_, y_, ema, state_dict, config):
             for accumulation_index in range(config['num_D_accumulations']):
                 z_.sample_()
                 y_.sample_()
-                *D_scores, D_out_augself, D_gts_augself = GD(z_[:config['batch_size']], y_[:config['batch_size']],
+                *D_scores, D_out_SS, SS_param = GD(z_[:config['batch_size']], y_[:config['batch_size']],
                               x[counter], y[counter], train_G=False, policy=config['DiffAugment'],
                               CR=config['CR'] > 0, CR_augment=config['CR_augment'])
 
                 D_loss_CR = 0
                 if config['CR'] > 0:
                     D_fake, D_real, D_real_aug = D_scores
-                    D_loss_CR = torch.mean(
-                        (D_real_aug - D_real) ** 2) * config['CR']
+                    D_loss_CR = torch.mean((D_real_aug - D_real) ** 2) * config['CR']
                 else:
                     D_fake, D_real = D_scores[0]
 
                 # Compute components of D's loss, average them, and divide by
                 # the number of gradient accumulations
-                D_loss_real, D_loss_fake = losses.discriminator_loss(
-                    D_fake, D_real)
-                D_loss_augself = 0.
-                if config['augself']:
-                    for aug in config['augself'].split(','):
-                        if AUGMENT_TPS[aug] == "regression":
-                            if config['selfsup'] in {'la', 'ls', 'la-', 'ls+', 'la--'}:
-                                D_loss_augself += F.mse_loss(D_out_augself[aug][:config['batch_size']], -config['margin'] - D_gts_augself[aug][:config['batch_size']])
-                                D_loss_augself += F.mse_loss(D_out_augself[aug][config['batch_size']:], +config['margin'] + D_gts_augself[aug][config['batch_size']:])
-                            elif config['selfsup'] in {'ms', 'ms-'}:
-                                D_loss_augself += F.mse_loss(D_out_augself[aug][:config['batch_size']], +config['margin'] + D_gts_augself[aug][:config['batch_size']])
-                                D_loss_augself += F.mse_loss(D_out_augself[aug][config['batch_size']:], D_gts_augself[aug][config['batch_size']:] - D_gts_augself[aug][config['batch_size']:])
-                            elif config['selfsup'] == 'ss':
-                                D_loss_augself += F.mse_loss(D_out_augself[aug][config['batch_size']:], D_gts_augself[aug][config['batch_size']:])
-                            elif config['selfsup'] == 'ss+':
-                                D_loss_augself += F.mse_loss(D_out_augself[aug], D_gts_augself[aug])
-                        elif AUGMENT_TPS[aug] == "classification":
-                            if config['selfsup'] in {'la', 'la-', 'la--'}:
-                                D_loss_augself += F.cross_entropy(D_out_augself[aug][:config['batch_size']], D_gts_augself[aug][:config['batch_size']].view(-1) * 2 + 1)
-                                D_loss_augself += F.cross_entropy(D_out_augself[aug][config['batch_size']:], D_gts_augself[aug][config['batch_size']:].view(-1) * 2)
-                            elif config['selfsup'] in {'ms', 'ms-'}:
-                                D_loss_augself += F.cross_entropy(D_out_augself[aug][config['batch_size']:], D_gts_augself[aug][config['batch_size']:].view(-1))
-                                D_loss_augself += F.cross_entropy(D_out_augself[aug][:config['batch_size']], (torch.ones_like(D_gts_augself[aug][:config['batch_size']]) * AUGMENT_DMS[aug]).long().view(-1))
-                            elif config['selfsup'] == 'ss':
-                                D_loss_augself += F.cross_entropy(D_out_augself[aug][config['batch_size']:], D_gts_augself[aug][config['batch_size']:].view(-1))
-                            elif config['selfsup'] == 'ss+':
-                                D_loss_augself += F.cross_entropy(D_out_augself[aug], D_gts_augself[aug].view(-1))
-                D_loss = D_loss_real + D_loss_fake + D_loss_CR + D_loss_augself * config['D_augself']
+                D_loss_real, D_loss_fake = losses.discriminator_loss(D_fake, D_real)
+                D_loss_SS = 0.
+                for aug in filter(None, config['SS_augs'].split(',')):
+                    D_out_SS_fake = D_out_SS[aug][:config['batch_size']]
+                    D_out_SS_real = D_out_SS[aug][config['batch_size']:]
+
+                    if config['SS_label'] == 'sym':
+                        SS_fake_label = -config['margin'] - SS_param[aug][:config['batch_size']]
+                        SS_real_label = +config['margin'] + SS_param[aug][config['batch_size']:]
+                    elif config['SS_label'] == 'trans':
+                        SS_fake_label = -config['margin'] + SS_param[aug][:config['batch_size']] - 1
+                        SS_real_label = +config['margin'] + SS_param[aug][config['batch_size']:]
+                    elif config['SS_label'] == 'same':
+                        SS_fake_label = SS_param[aug][:config['batch_size']]
+                        SS_real_label = SS_param[aug][config['batch_size']:]
+
+                    if config['SS_D_data'] == 'real':
+                        D_loss_SS += F.mse_loss(D_out_SS_real, SS_real_label) * config['SS_D_weight']
+                    elif config['SS_D_data'] == 'all':
+                        D_loss_SS += (F.mse_loss(D_out_SS_real, SS_real_label) + F.mse_loss(D_out_SS_fake, SS_fake_label)) * config['SS_D_weight']
+                D_loss = D_loss_real + D_loss_fake + D_loss_CR + D_loss_SS
                 D_loss = D_loss / float(config['num_D_accumulations'])
                 D_loss.backward()
                 counter += 1
@@ -108,46 +99,28 @@ def GAN_training_function(G, D, GD, z_, y_, ema, state_dict, config):
             for accumulation_index in range(config['num_G_accumulations']):
                 z_.sample_()
                 y_.sample_()
-                D_fake, D_out_augself, D_gts_augself = GD(z_, y_, train_G=True, policy=config['DiffAugment'])
-                G_loss_augself = 0.
-                if config['augself']:
-                    for aug in config['augself'].split(','):
-                        if AUGMENT_TPS[aug] == "regression":
-                            if config['selfsup'] == 'la':
-                                G_loss_augself += F.mse_loss(D_out_augself[aug], +config['margin'] + D_gts_augself[aug])
-                                G_loss_augself -= F.mse_loss(D_out_augself[aug], -config['margin'] - D_gts_augself[aug])
-                            elif config['selfsup'] in {'la-', 'ls+'}:
-                                G_loss_augself += F.mse_loss(D_out_augself[aug], +config['margin'] + D_gts_augself[aug])
-                            elif config['selfsup'] == 'la--':
-                                G_loss_augself -= F.mse_loss(D_out_augself[aug], -config['margin'] - D_gts_augself[aug])
-                            elif config['selfsup'] == 'ls':
-                                G_loss_augself += F.mse_loss(D_out_augself[aug], D_gts_augself[aug] - D_gts_augself[aug])
-                            elif config['selfsup'] == 'ms':
-                                G_loss_augself += F.mse_loss(D_out_augself[aug], +config['margin'] + D_gts_augself[aug])
-                                G_loss_augself -= F.mse_loss(D_out_augself[aug], D_gts_augself[aug] - D_gts_augself[aug])
-                            elif config['selfsup'] == 'ms-':
-                                G_loss_augself += F.mse_loss(D_out_augself[aug], +config['margin'] + D_gts_augself[aug])
-                            elif config['selfsup'] in {'ss', 'ss+'}:
-                                G_loss_augself += F.mse_loss(D_out_augself[aug],  D_gts_augself[aug])
-                        elif AUGMENT_TPS[aug] == "classification":
-                            if config['selfsup'] == 'la':
-                                G_loss_augself += F.cross_entropy(D_out_augself[aug], D_gts_augself[aug].view(-1) * 2)
-                                G_loss_augself -= F.cross_entropy(D_out_augself[aug], D_gts_augself[aug].view(-1) * 2 + 1)
-                            elif config['selfsup'] == 'la-':
-                                G_loss_augself += F.cross_entropy(D_out_augself[aug], D_gts_augself[aug].view(-1) * 2)
-                            elif config['selfsup'] == 'la--':
-                                G_loss_augself -= F.cross_entropy(D_out_augself[aug], D_gts_augself[aug].view(-1) * 2 + 1)
-                            elif config['selfsup'] == 'ms':
-                                G_loss_augself += F.cross_entropy(D_out_augself[aug], D_gts_augself[aug].view(-1))
-                                G_loss_augself -= F.cross_entropy(D_out_augself[aug], (torch.ones_like(D_gts_augself[aug]) * AUGMENT_DMS[aug]).long().view(-1))
-                            elif config['selfsup'] == 'ms-':
-                                G_loss_augself += F.cross_entropy(D_out_augself[aug], D_gts_augself[aug].view(-1))
-                            elif config['selfsup'] in {'ss', 'ss+'}:
-                                G_loss_augself += F.cross_entropy(D_out_augself[aug],  D_gts_augself[aug].view(-1))
-                G_loss_augself = G_loss_augself * config['G_augself'] / float(config['num_G_accumulations'])
-                G_loss = losses.generator_loss(
-                    D_fake) / float(config['num_G_accumulations'])
-                (G_loss + G_loss_augself).backward()
+                D_fake, D_out_SS, SS_param = GD(z_, y_, train_G=True, policy=config['DiffAugment'])
+                G_loss_SS = 0.
+                for aug in filter(None, config['SS_augs'].split(',')):
+                    if config['SS_label'] == 'sym':
+                        SS_fake_label = -config['margin'] - SS_param[aug]
+                        SS_real_label = +config['margin'] + SS_param[aug]
+                    elif config['SS_label'] == 'trans':
+                        SS_fake_label = -config['margin'] + SS_param[aug] - 1
+                        SS_real_label = +config['margin'] + SS_param[aug]
+                    elif config['SS_label'] == 'same':
+                        SS_fake_label = SS_param[aug]
+                        SS_real_label = SS_param[aug]
+
+                    if config['SS_G_loss'] == 'sa':
+                        G_loss_SS -= F.mse_loss(D_out_SS[aug], SS_fake_label) * config['SS_G_weight']
+                    elif config['SS_G_loss'] == 'ns':
+                        G_loss_SS += F.mse_loss(D_out_SS[aug], SS_real_label) * config['SS_G_weight']
+                    elif config['SS_G_loss'] == 'both':
+                        G_loss_SS += (F.mse_loss(D_out_SS[aug], SS_real_label) - F.mse_loss(D_out_SS[aug], SS_fake_label)) * config['SS_G_weight']
+                G_loss_SS = G_loss_SS / float(config['num_G_accumulations'])
+                G_loss = losses.generator_loss(D_fake) / float(config['num_G_accumulations'])
+                (G_loss + G_loss_SS).backward()
 
             # Optionally apply modified ortho reg in G
             if config['G_ortho'] > 0.0:
