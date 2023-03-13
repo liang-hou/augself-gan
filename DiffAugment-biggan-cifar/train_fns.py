@@ -60,11 +60,11 @@ def GAN_training_function(G, D, GD, z_, y_, ema, state_dict, config):
                     D_out_SS_real = D_out_SS[aug][config['batch_size']:]
 
                     if config['SS_label'] == 'sym':
-                        SS_fake_label = -config['margin'] - SS_param[aug][:config['batch_size']]
-                        SS_real_label = +config['margin'] + SS_param[aug][config['batch_size']:]
+                        SS_fake_label = -config['SS_margin'] - SS_param[aug][:config['batch_size']]
+                        SS_real_label = +config['SS_margin'] + SS_param[aug][config['batch_size']:]
                     elif config['SS_label'] == 'trans':
-                        SS_fake_label = -config['margin'] + SS_param[aug][:config['batch_size']] - 1
-                        SS_real_label = +config['margin'] + SS_param[aug][config['batch_size']:]
+                        SS_fake_label = -config['SS_margin'] + SS_param[aug][:config['batch_size']] - 1
+                        SS_real_label = +config['SS_margin'] + SS_param[aug][config['batch_size']:]
                     elif config['SS_label'] == 'same':
                         SS_fake_label = SS_param[aug][:config['batch_size']]
                         SS_real_label = SS_param[aug][config['batch_size']:]
@@ -103,11 +103,11 @@ def GAN_training_function(G, D, GD, z_, y_, ema, state_dict, config):
                 G_loss_SS = 0.
                 for aug in filter(None, config['SS_augs'].split(',')):
                     if config['SS_label'] == 'sym':
-                        SS_fake_label = -config['margin'] - SS_param[aug]
-                        SS_real_label = +config['margin'] + SS_param[aug]
+                        SS_fake_label = -config['SS_margin'] - SS_param[aug]
+                        SS_real_label = +config['SS_margin'] + SS_param[aug]
                     elif config['SS_label'] == 'trans':
-                        SS_fake_label = -config['margin'] + SS_param[aug] - 1
-                        SS_real_label = +config['margin'] + SS_param[aug]
+                        SS_fake_label = -config['SS_margin'] + SS_param[aug] - 1
+                        SS_real_label = +config['SS_margin'] + SS_param[aug]
                     elif config['SS_label'] == 'same':
                         SS_fake_label = SS_param[aug]
                         SS_real_label = SS_param[aug]
