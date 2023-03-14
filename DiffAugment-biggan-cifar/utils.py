@@ -153,6 +153,7 @@ def prepare_parser():
     parser.add_argument('--SS_arch', type=str, default='linear', choices=['linear', 'bilinear', 'MLP'])
     parser.add_argument('--SS_label', type=str, default='sym', choices=['sym', 'trans', 'same'])
     parser.add_argument('--SS_margin', type=float, default=0.)
+    parser.add_argument('--SS_scale', type=float, default=1.)
     parser.add_argument('--SS_D_data', type=str, default='all', choices=['real', 'all'])
     parser.add_argument('--SS_G_loss', type=str, default='both', choices=['sa', 'ns', 'both'])
     parser.add_argument('--SS_D_weight', type=float, default=1.)
