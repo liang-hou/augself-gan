@@ -60,14 +60,14 @@ def GAN_training_function(G, D, GD, z_, y_, ema, state_dict, config):
                     D_out_SS_real = D_out_SS[aug][config['batch_size']:]
 
                     if config['SS_label'] == 'sym':
-                        SS_fake_label = -config['SS_margin'] - SS_param[aug][:config['batch_size']]
-                        SS_real_label = +config['SS_margin'] + SS_param[aug][config['batch_size']:]
+                        SS_fake_label = -config['SS_margin'] - SS_param[aug][:config['batch_size']] * config['SS_scale']
+                        SS_real_label = +config['SS_margin'] + SS_param[aug][config['batch_size']:] * config['SS_scale']
                     elif config['SS_label'] == 'trans':
-                        SS_fake_label = -config['SS_margin'] + SS_param[aug][:config['batch_size']] - 1
-                        SS_real_label = +config['SS_margin'] + SS_param[aug][config['batch_size']:]
+                        SS_fake_label = -config['SS_margin'] + (SS_param[aug][:config['batch_size']] - 1) * config['SS_scale']
+                        SS_real_label = +config['SS_margin'] + SS_param[aug][config['batch_size']:] * config['SS_scale']
                     elif config['SS_label'] == 'same':
-                        SS_fake_label = SS_param[aug][:config['batch_size']]
-                        SS_real_label = SS_param[aug][config['batch_size']:]
+                        SS_fake_label = +config['SS_margin'] + SS_param[aug][:config['batch_size']] * config['SS_scale']
+                        SS_real_label = +config['SS_margin'] + SS_param[aug][config['batch_size']:] * config['SS_scale']
 
                     if config['SS_D_data'] == 'real':
                         D_loss_SS += F.mse_loss(D_out_SS_real, SS_real_label) * config['SS_D_weight']
@@ -103,14 +103,14 @@ def GAN_training_function(G, D, GD, z_, y_, ema, state_dict, config):
                 G_loss_SS = 0.
                 for aug in filter(None, config['SS_augs'].split(',')):
                     if config['SS_label'] == 'sym':
-                        SS_fake_label = -config['SS_margin'] - SS_param[aug]
-                        SS_real_label = +config['SS_margin'] + SS_param[aug]
+                        SS_fake_label = -config['SS_margin'] - SS_param[aug] * config['SS_scale']
+                        SS_real_label = +config['SS_margin'] + SS_param[aug] * config['SS_scale']
                     elif config['SS_label'] == 'trans':
-                        SS_fake_label = -config['SS_margin'] + SS_param[aug] - 1
-                        SS_real_label = +config['SS_margin'] + SS_param[aug]
+                        SS_fake_label = -config['SS_margin'] + (SS_param[aug] - 1) * config['SS_scale']
+                        SS_real_label = +config['SS_margin'] + SS_param[aug] * config['SS_scale']
                     elif config['SS_label'] == 'same':
-                        SS_fake_label = SS_param[aug]
-                        SS_real_label = SS_param[aug]
+                        SS_fake_label = +config['SS_margin'] + SS_param[aug] * config['SS_scale']
+                        SS_real_label = +config['SS_margin'] + SS_param[aug] * config['SS_scale']
 
                     if config['SS_G_loss'] == 'sa':
                         G_loss_SS -= F.mse_loss(D_out_SS[aug], SS_fake_label) * config['SS_G_weight']
