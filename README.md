@@ -10,11 +10,11 @@ Augmentation-Aware Self-Supervision for Data-Efficient GAN Training<br>
 
 ## AugSelf-BigGAN on CIFAR-10 and CIFAR-100
 
-Please refer to the [augself-biggan-cifar](https://github.com/liang-hou/augself-gan/tree/main/augself-biggan-cifar) README to run *AugSelf-BigGAN* for conditional generation on CIFAR-10 and CIFAR-100.
+Please refer to the [augself-biggan-cifar](https://github.com/liang-hou/augself-gan/tree/main/augself-biggan) README to run *AugSelf-BigGAN* for conditional generation on CIFAR-10 and CIFAR-100.
 
 ## AugSelf-StyleGAN2 on Low-shot datasets and FFHQ
 
-Please refer to the [augself-stylegan2-pytorch](https://github.com/liang-hou/augself-gan/tree/main/augself-stylegan2-pytorch) README to run *AugSelf-StyleGAN2* for unconditional generation on low-shot datasets and FFHQ.
+Please refer to the [augself-stylegan2-pytorch](https://github.com/liang-hou/augself-gan/tree/main/augself-stylegan2) README to run *AugSelf-StyleGAN2* for unconditional generation on low-shot datasets and FFHQ.
 
 ## Citation
 
