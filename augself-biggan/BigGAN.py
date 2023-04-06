@@ -473,7 +473,7 @@ class G_D(nn.Module):
         self.G = G
         self.D = D
 
-    def forward(self, z, gy, x=None, dy=None, train_G=False, return_G_z=False, policy=False, CR=False, CR_augment=None):
+    def forward(self, z, gy, x=None, dy=None, train_G=False, return_G_z=False, policy=False, CR=False, CR_augment=None, config={}):
         if z is not None:
             # If training G, enable grad tape
             with torch.set_grad_enabled(train_G):
@@ -492,14 +492,14 @@ class G_D(nn.Module):
         D_class = torch.cat(
             [label for label in [gy, dy] if label is not None], 0)
         D_input_ori = D_input
-        D_input, SS_param = DiffAugment(D_input, policy=policy)
+        D_input, SS_param = DiffAugment(D_input, policy=policy, config=config)
         if CR:
             if CR_augment:
                 x_CR_aug = torch.split(D_input, [G_z.shape[0], x.shape[0]])[1]
                 if CR_augment.startswith('flip,'):
                     x_CR_aug = torch.where(torch.randint(0, 2, size=[x_CR_aug.size(
                         0), 1, 1, 1], device=x_CR_aug.device) > 0, x_CR_aug.flip(3), x_CR_aug)
-                x_CR_aug = DiffAugment(x_CR_aug, policy=CR_augment.replace('flip,', ''))
+                x_CR_aug = DiffAugment(x_CR_aug, policy=CR_augment.replace('flip,', ''), config=config)
                 D_input = torch.cat([D_input, x_CR_aug], 0)
             else:
                 D_input = torch.cat([D_input, x], 0)

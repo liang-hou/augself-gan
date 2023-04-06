@@ -7,7 +7,7 @@ import torch
 import torch.nn.functional as F
 
 
-def DiffAugment(x, policy='', channels_first=True):
+def DiffAugment(x, policy='', channels_first=True, config={}):
     param = {}
     if policy:
         if not channels_first:
@@ -15,7 +15,7 @@ def DiffAugment(x, policy='', channels_first=True):
         for p in policy.split(','):
             ys = []
             for f in AUGMENT_FNS[p]:
-                x, y = f(x)
+                x, y = f(x, config)
                 ys.append(y)
             ys = torch.cat(ys, 1)
             param[p] = ys
@@ -25,27 +25,31 @@ def DiffAugment(x, policy='', channels_first=True):
     return x, param
 
 
-def rand_brightness(x):
+def rand_brightness(x, config):
+    ratio = config.get('SS_brightness', 1.0)
     r = torch.rand(x.size(0), 1, 1, 1, dtype=x.dtype, device=x.device)
-    x = x + (r - 0.5)
+    x = x + (r - 0.5) * ratio
     return x, r.view(-1, 1)
 
 
-def rand_saturation(x):
+def rand_saturation(x, config):
+    ratio = config.get('SS_saturation', 1.0)
     r = torch.rand(x.size(0), 1, 1, 1, dtype=x.dtype, device=x.device)
     x_mean = x.mean(dim=1, keepdim=True)
-    x = (x - x_mean) * (r * 2) + x_mean
+    x = (x - x_mean) * ((r * 2 - 1) * ratio + 1) + x_mean
     return x, r.view(-1, 1)
 
 
-def rand_contrast(x):
+def rand_contrast(x, config):
+    ratio = config.get('SS_contrast', 1.0)
     r = torch.rand(x.size(0), 1, 1, 1, dtype=x.dtype, device=x.device)
     x_mean = x.mean(dim=[1, 2, 3], keepdim=True)
-    x = (x - x_mean) * (r + 0.5) + x_mean
+    x = (x - x_mean) * ((r - 0.5) * ratio + 1) + x_mean
     return x, r.view(-1, 1)
 
 
-def rand_translation(x, ratio=0.125):
+def rand_translation(x, config):
+    ratio = config.get('SS_translation', 0.125)
     shift_x, shift_y = int(x.size(2) * ratio + 0.5), int(x.size(3) * ratio + 0.5)
     translation_x = torch.randint(-shift_x, shift_x + 1, size=[x.size(0), 1, 1], device=x.device)
     translation_y = torch.randint(-shift_y, shift_y + 1, size=[x.size(0), 1, 1], device=x.device)
@@ -61,7 +65,8 @@ def rand_translation(x, ratio=0.125):
     return x, torch.cat([translation_x.view(-1, 1).float() / shift_x / 2.0 + 0.5, translation_y.view(-1, 1).float() / shift_y / 2.0 + 0.5], 1)
 
 
-def rand_cutout(x, ratio=0.5):
+def rand_cutout(x, config):
+    ratio = config.get('SS_cutout', 0.5)
     cutout_size = int(x.size(2) * ratio + 0.5), int(x.size(3) * ratio + 0.5)
     offset_x = torch.randint(0, x.size(2) + (1 - cutout_size[0] % 2), size=[x.size(0), 1, 1], device=x.device)
     offset_y = torch.randint(0, x.size(3) + (1 - cutout_size[1] % 2), size=[x.size(0), 1, 1], device=x.device)
@@ -78,7 +83,7 @@ def rand_cutout(x, ratio=0.5):
     return x, torch.cat([offset_x.view(-1, 1).float() / (x.size(2) - cutout_size[0] % 2), offset_y.view(-1, 1).float() / (x.size(3) - cutout_size[1] % 2)], 1)
 
 
-def rand_cutout_new(x, low_ratio=0.25, high_ratio=0.5):
+def rand_cutout_test(x, low_ratio=0.25, high_ratio=0.5):
     cutout_sizes = int(x.size(2) * high_ratio + 0.5), int(x.size(3) * high_ratio + 0.5)
     cutout_size_x = torch.randint(int(x.size(2) * low_ratio + 0.5), int(x.size(2) * high_ratio + 0.5) + 1, size=[x.size(0), 1, 1], device=x.device)
     cutout_size_y = torch.randint(int(x.size(3) * low_ratio + 0.5), int(x.size(3) * high_ratio + 0.5) + 1, size=[x.size(0), 1, 1], device=x.device)

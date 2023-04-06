@@ -42,7 +42,7 @@ def GAN_training_function(G, D, GD, z_, y_, ema, state_dict, config):
                 y_.sample_()
                 *D_scores, D_out_SS, SS_param = GD(z_[:config['batch_size']], y_[:config['batch_size']],
                               x[counter], y[counter], train_G=False, policy=config['DiffAugment'],
-                              CR=config['CR'] > 0, CR_augment=config['CR_augment'])
+                              CR=config['CR'] > 0, CR_augment=config['CR_augment'], config=config)
 
                 D_loss_CR = 0
                 if config['CR'] > 0:
@@ -99,7 +99,7 @@ def GAN_training_function(G, D, GD, z_, y_, ema, state_dict, config):
             for accumulation_index in range(config['num_G_accumulations']):
                 z_.sample_()
                 y_.sample_()
-                D_fake, D_out_SS, SS_param = GD(z_, y_, train_G=True, policy=config['DiffAugment'])
+                D_fake, D_out_SS, SS_param = GD(z_, y_, train_G=True, policy=config['DiffAugment'], config=config)
                 G_loss_SS = 0.
                 for aug in filter(None, config['SS_augs'].split(',')):
                     if config['SS_label'] == 'sym':
@@ -227,7 +227,7 @@ def test(G, D, GD, G_ema, z_, y_, state_dict, config, sample, get_inception_metr
         **{**config, 'train': False, 'use_multiepoch_sampler': False, 'load_in_mem': False})[0]
     with torch.no_grad():
         for x, y in loader:
-            D_real, *_ = GD(None, None, x=x, dy=y, policy=config['DiffAugment'])
+            D_real, *_ = GD(None, None, x=x, dy=y, policy=config['DiffAugment'], config=config)
             D_accuracy.append((D_real > 0).float().mean().item())
     D.train()
     D_acc_val = np.mean(D_accuracy)
@@ -239,7 +239,7 @@ def test(G, D, GD, G_ema, z_, y_, state_dict, config, sample, get_inception_metr
         **{**config, 'train': True, 'use_multiepoch_sampler': False, 'load_in_mem': False})[0]
     with torch.no_grad():
         for x, y in loader:
-            D_real, *_ = GD(None, None, x=x, dy=y, policy=config['DiffAugment'])
+            D_real, *_ = GD(None, None, x=x, dy=y, policy=config['DiffAugment'], config=config)
             D_accuracy.append((D_real > 0).float().mean().item())
     D.train()
     D_acc_train = np.mean(D_accuracy)

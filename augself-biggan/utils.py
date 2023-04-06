@@ -149,6 +149,11 @@ def prepare_parser():
         '--CR', type=float, default=0,
         help='Consistency Regularization for GANs (default: %(default)s)')
     parser.add_argument('--SS_augs', type=str, default='color,translation,cutout')
+    parser.add_argument('--SS_brightness', type=float, default=1.)
+    parser.add_argument('--SS_saturation', type=float, default=1.)
+    parser.add_argument('--SS_contrast', type=float, default=1.)
+    parser.add_argument('--SS_translation', type=float, default=0.125)
+    parser.add_argument('--SS_cutout', type=float, default=0.5)
     parser.add_argument('--SS_fuse', type=str, default='sub', choices=['sub', 'cat'])
     parser.add_argument('--SS_arch', type=str, default='linear', choices=['linear', 'bilinear', 'MLP'])
     parser.add_argument('--SS_label', type=str, default='sym', choices=['sym', 'trans', 'same'])

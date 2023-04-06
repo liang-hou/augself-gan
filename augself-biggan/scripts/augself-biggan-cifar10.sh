@@ -1,6 +1,6 @@
 #!/bin/bash
-python train.py --experiment_name ss-color+translation+cutout-linear-sub-d1g1-DiffAugment-biggan-cifar10 --DiffAugment color,translation,cutout \
---SS_augs color,translation,cutout --SS_arch linear --SS_fuse sub --SS_label same --SS_margin 0.0 --SS_D_data real --SS_G_loss ns --SS_D_weight 1.0 --SS_G_weight 1.0 \
+python train.py --experiment_name augself-biggan-cifar10 --DiffAugment color,translation,cutout \
+--SS_augs color,translation,cutout --SS_arch linear --SS_fuse sub --SS_label sym --SS_margin 0.0 --SS_D_data all --SS_G_loss both --SS_D_weight 1.0 --SS_G_weight 1.0 \
 --mirror_augment --use_multiepoch_sampler \
 --which_best FID --num_inception_images 10000 \
 --shuffle --batch_size 50 --parallel \
