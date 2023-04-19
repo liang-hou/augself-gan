@@ -14,7 +14,7 @@ Please refer to the [augself-biggan-cifar](https://github.com/liang-hou/augself-
 
 ## AugSelf-StyleGAN2 on Low-shot datasets and FFHQ
 
-Please refer to the [augself-stylegan2-pytorch](https://github.com/liang-hou/augself-gan/tree/main/augself-stylegan2) README to run *AugSelf-StyleGAN2* for unconditional generation on low-shot datasets and FFHQ.
+Please refer to the [augself-stylegan2-pytorch](https://github.com/liang-hou/augself-gan/tree/main/augself-stylegan2) README to run *AugSelf-StyleGAN2* for unconditional generation on low-shot datasets, FFHQ, and LSUN-Cat.
 
 ## Citation
 
