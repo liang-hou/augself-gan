@@ -1,6 +1,6 @@
 # AugSelf-GAN &mdash; Official PyTorch Implementation
 
-![AugSelf-GAN](./resources/augself-gan.pdf)
+![AugSelf-GAN](./resources/augself-gan.png)
 
 **Augmentation-Aware Self-Supervision for Data-Efficient GAN Training**<br>
 *[Liang Hou](), Qi Cao, Yige Yuan, Huawei Shen, Xueqi Cheng*<br>
