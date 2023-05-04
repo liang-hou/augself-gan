@@ -70,7 +70,6 @@ def setup_training_loop_kwargs(
     augself    = None,
     d_augself  = None,
     g_augself  = None,
-    margin     = None,
     out_form   = None,
 ):
     args = dnnlib.EasyDict()
@@ -378,9 +377,9 @@ def setup_training_loop_kwargs(
             raise UserError('--workers must be at least 1')
         args.data_loader_kwargs.num_workers = workers
 
-    # --------------------------------------------------------------------------
-    # Augmentation-Aware Self-Supervision: augself, d_augself, g_augself, margin
-    # --------------------------------------------------------------------------
+    # ------------------------------------------------------------------
+    # Augmentation-Aware Self-Supervision: augself, d_augself, g_augself
+    # ------------------------------------------------------------------
     if augself:
         assert isinstance(augself, str)
         desc += '-{}'.format(augself.replace(',', '+'))
@@ -400,10 +399,6 @@ def setup_training_loop_kwargs(
         assert isinstance(g_augself, float)
         desc += f'-g{g_augself:g}'
         args.loss_kwargs.G_augself = g_augself
-    if margin:
-        assert isinstance(margin, float)
-        desc += f'-m{margin:g}'
-        args.loss_kwargs.margin = margin
 
     return desc, args
 
@@ -489,7 +484,6 @@ class CommaSeparatedList(click.ParamType):
 @click.option('--augself', help='Comma-separated list of AugSelf [default: color,translation,cutout]', type=str)
 @click.option('--d_augself', help='Weight for AugSelf of D', type=float)
 @click.option('--g_augself', help='Weight for AugSelf of G', type=float)
-@click.option('--margin', help='Margin for AugSelf Loss', type=float)
 @click.option('--out_form', help='Output layer form for predicting AugSelf', type=str)
 
 def main(ctx, outdir, dry_run, **config_kwargs):
