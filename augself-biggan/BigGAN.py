@@ -376,7 +376,7 @@ class Discriminator(nn.Module):
         self.SS_arch = SS_arch
         self.out_SS = {}
         for aug in filter(None, self.SS_augs.split(',')):
-            if self.SS_fuse == 'cat' and self.SS_fuse != 'bilinear':
+            if self.SS_fuse == 'cat' and self.SS_arch != 'bilinear':
                 in_dim = self.arch['out_channels'][-1] * 2
             else:
                 in_dim = self.arch['out_channels'][-1]
@@ -438,17 +438,17 @@ class Discriminator(nn.Module):
     def forward(self, x, x_o=None, y=None):
         # Stick x into h for cleaner for loops without flow control
         h = x
-        if self.SS_augs:
+        if self.SS_augs and self.SS_fuse != 'sin':
             h_o = x_o
         # Loop over blocks
         for index, blocklist in enumerate(self.blocks):
             for block in blocklist:
                 h = block(h)
-                if self.SS_augs:
+                if self.SS_augs and self.SS_fuse != 'sin':
                     h_o = block(h_o)
         # Apply global sum pooling as in SN-GAN
         h = torch.sum(self.activation(h), [2, 3])
-        if self.SS_augs:
+        if self.SS_augs and self.SS_fuse != 'sin':
             h_o = torch.sum(self.activation(h_o), [2, 3])
         # Get initial class-unconditional output
         out = self.linear(h)
@@ -461,6 +461,8 @@ class Discriminator(nn.Module):
                     out_SS[aug] = self.out_SS[aug](h - h_o)
                 elif self.SS_fuse == 'cat':
                     out_SS[aug] = self.out_SS[aug](torch.cat([h, h_o], -1))
+                elif self.SS_fuse == 'sin':
+                    out_SS[aug] = self.out_SS[aug](h)
             elif self.SS_arch == 'bilinear':
                 out_SS[aug] = self.out_SS[aug](h, h_o)
         return out, out_SS

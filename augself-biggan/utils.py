@@ -154,7 +154,7 @@ def prepare_parser():
     parser.add_argument('--translation', type=float, default=0.125)
     parser.add_argument('--cutout', type=float, default=0.5)
     parser.add_argument('--SS_augs', type=str, default='')
-    parser.add_argument('--SS_fuse', type=str, default='sub', choices=['sub', 'cat'])
+    parser.add_argument('--SS_fuse', type=str, default='sub', choices=['sub', 'cat', 'sin'])
     parser.add_argument('--SS_arch', type=str, default='linear', choices=['linear', 'bilinear', 'MLP'])
     parser.add_argument('--SS_label', type=str, default='sym', choices=['sym', 'trans', 'same'])
     parser.add_argument('--SS_margin', type=float, default=0.)
