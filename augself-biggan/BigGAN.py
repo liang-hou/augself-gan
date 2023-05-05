@@ -438,15 +438,18 @@ class Discriminator(nn.Module):
     def forward(self, x, x_o=None, y=None):
         # Stick x into h for cleaner for loops without flow control
         h = x
-        h_o = x_o
+        if self.SS_augs:
+            h_o = x_o
         # Loop over blocks
         for index, blocklist in enumerate(self.blocks):
             for block in blocklist:
                 h = block(h)
-                h_o = block(h_o)
+                if self.SS_augs:
+                    h_o = block(h_o)
         # Apply global sum pooling as in SN-GAN
         h = torch.sum(self.activation(h), [2, 3])
-        h_o = torch.sum(self.activation(h_o), [2, 3])
+        if self.SS_augs:
+            h_o = torch.sum(self.activation(h_o), [2, 3])
         # Get initial class-unconditional output
         out = self.linear(h)
         # Get projection of final featureset onto class vectors and add to evidence
