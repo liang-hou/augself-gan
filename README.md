@@ -2,9 +2,7 @@
 
 ![AugSelf-GAN](./resources/augself-gan.png)
 
-**Augmentation-Aware Self-Supervision for Data-Efficient GAN Training**<br>
-*[Liang Hou](), Qi Cao, Yige Yuan, Huawei Shen, Xueqi Cheng*<br>
-[[arXiv]](https://arxiv.org/abs/2205.15677)
+[**Augmentation-Aware Self-Supervision for Data-Efficient GAN Training**](https://arxiv.org/abs/2205.15677)<br>
 
 ## Overview
 
@@ -12,9 +10,9 @@
 
 Please refer to the [augself-biggan](https://github.com/liang-hou/augself-gan/tree/main/augself-biggan) README to run *AugSelf-BigGAN* for conditional generation on CIFAR-10 and CIFAR-100.
 
-## AugSelf-StyleGAN2 on Low-shot datasets and FFHQ
+## AugSelf-StyleGAN2 on FFHQ, LSUN-Cat, and five low-shot datasets
 
-Please refer to the [augself-stylegan2](https://github.com/liang-hou/augself-gan/tree/main/augself-stylegan2) README to run *AugSelf-StyleGAN2* for unconditional generation on low-shot datasets, FFHQ, and LSUN-Cat.
+Please refer to the [augself-stylegan2](https://github.com/liang-hou/augself-gan/tree/main/augself-stylegan2) README to run *AugSelf-StyleGAN2* for unconditional generation on FFHQ, LSUN-Cat, and five low-shot datasets.
 
 ## Citation
 
