@@ -18,6 +18,8 @@ def run_eval(config):
     config = utils.update_config_roots(config)
     config['skip_init'] = True
     config['no_optim'] = True
+    config['num_epochs'] = 1
+    config['num_samples'] = 50000
     device = 'cuda'
 
     model = __import__(config['model'])
