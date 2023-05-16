@@ -1,8 +1,8 @@
 # AugSelf-GAN &mdash; Official PyTorch Implementation
 
-![AugSelf-GAN](./resources/augself-gan.png)
-
 ## Overview
+
+![AugSelf-GAN](./resources/augself-gan.png)
 
 ## AugSelf-BigGAN on CIFAR-10 and CIFAR-100
 
