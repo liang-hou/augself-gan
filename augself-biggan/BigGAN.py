@@ -295,7 +295,7 @@ class Discriminator(nn.Module):
                  D_lr=2e-4, D_B1=0.0, D_B2=0.999, adam_eps=1e-8,
                  SN_eps=1e-12, output_dim=1, D_mixed_precision=False, D_fp16=False,
                  D_init='ortho', skip_init=False, D_param='SN',
-                 SS_augs='', SS_fuse='sub', SS_arch='linear', **kwargs):
+                 augself='', **kwargs):
         super(Discriminator, self).__init__()
         # Width multiplier
         self.ch = D_ch
@@ -371,31 +371,11 @@ class Discriminator(nn.Module):
         self.embed = self.which_embedding(
             self.n_classes, self.arch['out_channels'][-1])
 
-        self.SS_augs = SS_augs
-        self.SS_fuse = SS_fuse
-        self.SS_arch = SS_arch
-        self.out_SS = {}
-        for aug in filter(None, self.SS_augs.split(',')):
-            if self.SS_fuse == 'cat' and self.SS_arch != 'bilinear':
-                in_dim = self.arch['out_channels'][-1] * 2
-            else:
-                in_dim = self.arch['out_channels'][-1]
-            out_dim = AUGMENT_DIM[aug]
-            hid_dim = max(in_dim, out_dim)
-            if self.SS_arch == 'linear':
-                self.out_SS[aug] = self.which_linear(in_dim, out_dim)
-            elif self.SS_arch =='bilinear':
-                if self.D_param == 'SN':
-                    self.out_SS[aug] = nn.utils.spectral_norm(nn.Bilinear(in_dim, in_dim, out_dim))
-                else:
-                    self.out_SS[aug] = nn.Bilinear(in_dim, in_dim, out_dim)
-            elif self.SS_arch == 'MLP':
-                self.out_SS[aug] = nn.Sequential(
-                    self.which_linear(in_dim, hid_dim),
-                    nn.ReLU(),
-                    self.which_linear(hid_dim, out_dim)
-                )
-        self.out_SS = nn.ModuleDict(self.out_SS)
+        self.augself = augself
+        self.out_augself = {}
+        for aug in filter(None, self.augself.split(',')):
+            self.out_augself[aug] = self.which_linear(self.arch['out_channels'][-1], AUGMENT_DIM[aug])
+        self.out_augself = nn.ModuleDict(self.out_augself)
 
         # Initialize weights
         if not skip_init:
@@ -438,34 +418,26 @@ class Discriminator(nn.Module):
     def forward(self, x, x_o=None, y=None):
         # Stick x into h for cleaner for loops without flow control
         h = x
-        if self.SS_augs and self.SS_fuse != 'sin':
+        if self.augself:
             h_o = x_o
         # Loop over blocks
         for index, blocklist in enumerate(self.blocks):
             for block in blocklist:
                 h = block(h)
-                if self.SS_augs and self.SS_fuse != 'sin':
+                if self.augself:
                     h_o = block(h_o)
         # Apply global sum pooling as in SN-GAN
         h = torch.sum(self.activation(h), [2, 3])
-        if self.SS_augs and self.SS_fuse != 'sin':
+        if self.augself:
             h_o = torch.sum(self.activation(h_o), [2, 3])
         # Get initial class-unconditional output
         out = self.linear(h)
         # Get projection of final featureset onto class vectors and add to evidence
         out = out + torch.sum(self.embed(y) * h, 1, keepdim=True)
-        out_SS = {}
-        for aug in filter(None, self.SS_augs.split(',')):
-            if self.SS_arch in ['linear', 'MLP']:
-                if self.SS_fuse == 'sub':
-                    out_SS[aug] = self.out_SS[aug](h - h_o)
-                elif self.SS_fuse == 'cat':
-                    out_SS[aug] = self.out_SS[aug](torch.cat([h, h_o], -1))
-                elif self.SS_fuse == 'sin':
-                    out_SS[aug] = self.out_SS[aug](h)
-            elif self.SS_arch == 'bilinear':
-                out_SS[aug] = self.out_SS[aug](h, h_o)
-        return out, out_SS
+        out_augself = {}
+        for aug in filter(None, self.augself.split(',')):
+            out_augself[aug] = self.out_augself[aug](h - h_o)
+        return out, out_augself
 
 
 # Parallelized G_D to minimize cross-gpu communication
@@ -497,7 +469,7 @@ class G_D(nn.Module):
         D_class = torch.cat(
             [label for label in [gy, dy] if label is not None], 0)
         D_input_ori = D_input
-        D_input, SS_param = DiffAugment(D_input, policy=policy, config=config)
+        D_input, augself_param = DiffAugment(D_input, policy=policy, config=config)
         if CR:
             if CR_augment:
                 x_CR_aug = torch.split(D_input, [G_z.shape[0], x.shape[0]])[1]
@@ -510,16 +482,16 @@ class G_D(nn.Module):
                 D_input = torch.cat([D_input, x], 0)
             D_class = torch.cat([D_class, dy], 0)
         # Get Discriminator output
-        D_out, D_out_SS = self.D(D_input, D_input_ori, D_class)
+        D_out, D_out_augself = self.D(D_input, D_input_ori, D_class)
         if G_z is None:
             return D_out
         elif x is not None:
             if CR:
                 return torch.split(D_out, [G_z.shape[0], x.shape[0], x.shape[0]])
             else:
-                return torch.split(D_out, [G_z.shape[0], x.shape[0]]), D_out_SS, SS_param
+                return torch.split(D_out, [G_z.shape[0], x.shape[0]]), D_out_augself, augself_param
         else:
             if return_G_z:
                 return D_out, G_z
             else:
-                return D_out, D_out_SS, SS_param
+                return D_out, D_out_augself, augself_param

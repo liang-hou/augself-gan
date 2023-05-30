@@ -40,7 +40,7 @@ def GAN_training_function(G, D, GD, z_, y_, ema, state_dict, config):
             for accumulation_index in range(config['num_D_accumulations']):
                 z_.sample_()
                 y_.sample_()
-                *D_scores, D_out_SS, SS_param = GD(z_[:config['batch_size']], y_[:config['batch_size']],
+                *D_scores, D_out_augself, augself_param = GD(z_[:config['batch_size']], y_[:config['batch_size']],
                               x[counter], y[counter], train_G=False, policy=config['DiffAugment'],
                               CR=config['CR'] > 0, CR_augment=config['CR_augment'], config=config)
 
@@ -54,26 +54,16 @@ def GAN_training_function(G, D, GD, z_, y_, ema, state_dict, config):
                 # Compute components of D's loss, average them, and divide by
                 # the number of gradient accumulations
                 D_loss_real, D_loss_fake = losses.discriminator_loss(D_fake, D_real)
-                D_loss_SS = 0.
-                for aug in filter(None, config['SS_augs'].split(',')):
-                    D_out_SS_fake = D_out_SS[aug][:config['batch_size']]
-                    D_out_SS_real = D_out_SS[aug][config['batch_size']:]
+                D_loss_augself = 0.
+                for aug in filter(None, config['augself'].split(',')):
+                    D_out_augself_fake = D_out_augself[aug][:config['batch_size']]
+                    D_out_augself_real = D_out_augself[aug][config['batch_size']:]
 
-                    if config['SS_label'] == 'sym':
-                        SS_fake_label = -config['SS_margin'] - SS_param[aug][:config['batch_size']] * config['SS_scale']
-                        SS_real_label = +config['SS_margin'] + SS_param[aug][config['batch_size']:] * config['SS_scale']
-                    elif config['SS_label'] == 'trans':
-                        SS_fake_label = -config['SS_margin'] + (SS_param[aug][:config['batch_size']] - 1) * config['SS_scale']
-                        SS_real_label = +config['SS_margin'] + SS_param[aug][config['batch_size']:] * config['SS_scale']
-                    elif config['SS_label'] == 'same':
-                        SS_fake_label = +config['SS_margin'] + SS_param[aug][:config['batch_size']] * config['SS_scale']
-                        SS_real_label = +config['SS_margin'] + SS_param[aug][config['batch_size']:] * config['SS_scale']
+                    augself_param_fake = -augself_param[aug][:config['batch_size']]
+                    augself_param_real =  augself_param[aug][config['batch_size']:]
 
-                    if config['SS_D_data'] == 'real':
-                        D_loss_SS += F.mse_loss(D_out_SS_real, SS_real_label) * config['SS_D_weight']
-                    elif config['SS_D_data'] == 'all':
-                        D_loss_SS += (F.mse_loss(D_out_SS_real, SS_real_label) + F.mse_loss(D_out_SS_fake, SS_fake_label)) * config['SS_D_weight']
-                D_loss = D_loss_real + D_loss_fake + D_loss_CR + D_loss_SS
+                    D_loss_augself += (F.mse_loss(D_out_augself_real, augself_param_real) + F.mse_loss(D_out_augself_fake, augself_param_fake)) * config['D_augself']
+                D_loss = D_loss_real + D_loss_fake + D_loss_CR + D_loss_augself
                 D_loss = D_loss / float(config['num_D_accumulations'])
                 D_loss.backward()
                 counter += 1
@@ -99,28 +89,16 @@ def GAN_training_function(G, D, GD, z_, y_, ema, state_dict, config):
             for accumulation_index in range(config['num_G_accumulations']):
                 z_.sample_()
                 y_.sample_()
-                D_fake, D_out_SS, SS_param = GD(z_, y_, train_G=True, policy=config['DiffAugment'], config=config)
-                G_loss_SS = 0.
-                for aug in filter(None, config['SS_augs'].split(',')):
-                    if config['SS_label'] == 'sym':
-                        SS_fake_label = -config['SS_margin'] - SS_param[aug] * config['SS_scale']
-                        SS_real_label = +config['SS_margin'] + SS_param[aug] * config['SS_scale']
-                    elif config['SS_label'] == 'trans':
-                        SS_fake_label = -config['SS_margin'] + (SS_param[aug] - 1) * config['SS_scale']
-                        SS_real_label = +config['SS_margin'] + SS_param[aug] * config['SS_scale']
-                    elif config['SS_label'] == 'same':
-                        SS_fake_label = +config['SS_margin'] + SS_param[aug] * config['SS_scale']
-                        SS_real_label = +config['SS_margin'] + SS_param[aug] * config['SS_scale']
+                D_fake, D_out_augself, augself_param = GD(z_, y_, train_G=True, policy=config['DiffAugment'], config=config)
+                G_loss_augself = 0.
+                for aug in filter(None, config['augself'].split(',')):
+                    augself_param_fake = -augself_param[aug]
+                    augself_param_real =  augself_param[aug]
 
-                    if config['SS_G_loss'] == 'sa':
-                        G_loss_SS -= F.mse_loss(D_out_SS[aug], SS_fake_label) * config['SS_G_weight']
-                    elif config['SS_G_loss'] == 'ns':
-                        G_loss_SS += F.mse_loss(D_out_SS[aug], SS_real_label) * config['SS_G_weight']
-                    elif config['SS_G_loss'] == 'both':
-                        G_loss_SS += (F.mse_loss(D_out_SS[aug], SS_real_label) - F.mse_loss(D_out_SS[aug], SS_fake_label)) * config['SS_G_weight']
-                G_loss_SS = G_loss_SS / float(config['num_G_accumulations'])
+                    G_loss_augself += (F.mse_loss(D_out_augself[aug], augself_param_real) - F.mse_loss(D_out_augself[aug], augself_param_fake)) * config['G_augself']
+                G_loss_augself = G_loss_augself / float(config['num_G_accumulations'])
                 G_loss = losses.generator_loss(D_fake) / float(config['num_G_accumulations'])
-                (G_loss + G_loss_SS).backward()
+                (G_loss + G_loss_augself).backward()
 
             # Optionally apply modified ortho reg in G
             if config['G_ortho'] > 0.0:

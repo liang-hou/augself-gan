@@ -153,16 +153,9 @@ def prepare_parser():
     parser.add_argument('--contrast', type=float, default=1.)
     parser.add_argument('--translation', type=float, default=0.125)
     parser.add_argument('--cutout', type=float, default=0.5)
-    parser.add_argument('--SS_augs', type=str, default='')
-    parser.add_argument('--SS_fuse', type=str, default='sub', choices=['sub', 'cat', 'sin'])
-    parser.add_argument('--SS_arch', type=str, default='linear', choices=['linear', 'bilinear', 'MLP'])
-    parser.add_argument('--SS_label', type=str, default='sym', choices=['sym', 'trans', 'same'])
-    parser.add_argument('--SS_margin', type=float, default=0.)
-    parser.add_argument('--SS_scale', type=float, default=1.)
-    parser.add_argument('--SS_D_data', type=str, default='all', choices=['real', 'all'])
-    parser.add_argument('--SS_G_loss', type=str, default='both', choices=['sa', 'ns', 'both'])
-    parser.add_argument('--SS_D_weight', type=float, default=1.)
-    parser.add_argument('--SS_G_weight', type=float, default=1.)
+    parser.add_argument('--augself', type=str, default='')
+    parser.add_argument('--D_augself', type=float, default=1.)
+    parser.add_argument('--G_augself', type=float, default=1.)
 
     ### Model init stuff ###
     parser.add_argument(
