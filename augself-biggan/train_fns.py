@@ -56,13 +56,8 @@ def GAN_training_function(G, D, GD, z_, y_, ema, state_dict, config):
                 D_loss_real, D_loss_fake = losses.discriminator_loss(D_fake, D_real)
                 D_loss_augself = 0.
                 for aug in filter(None, config['augself'].split(',')):
-                    D_out_augself_fake = D_out_augself[aug][:config['batch_size']]
-                    D_out_augself_real = D_out_augself[aug][config['batch_size']:]
-
-                    augself_param_fake = -augself_param[aug][:config['batch_size']]
-                    augself_param_real =  augself_param[aug][config['batch_size']:]
-
-                    D_loss_augself += (F.mse_loss(D_out_augself_real, augself_param_real) + F.mse_loss(D_out_augself_fake, augself_param_fake)) * config['D_augself']
+                    D_loss_augself += (F.mse_loss(D_out_augself[aug][config['batch_size']:], augself_param[aug][config['batch_size']:]) + \
+                                       F.mse_loss(D_out_augself[aug][:config['batch_size']],-augself_param[aug][:config['batch_size']])) * config['D_augself']
                 D_loss = D_loss_real + D_loss_fake + D_loss_CR + D_loss_augself
                 D_loss = D_loss / float(config['num_D_accumulations'])
                 D_loss.backward()
@@ -92,10 +87,8 @@ def GAN_training_function(G, D, GD, z_, y_, ema, state_dict, config):
                 D_fake, D_out_augself, augself_param = GD(z_, y_, train_G=True, policy=config['DiffAugment'], config=config)
                 G_loss_augself = 0.
                 for aug in filter(None, config['augself'].split(',')):
-                    augself_param_fake = -augself_param[aug]
-                    augself_param_real =  augself_param[aug]
-
-                    G_loss_augself += (F.mse_loss(D_out_augself[aug], augself_param_real) - F.mse_loss(D_out_augself[aug], augself_param_fake)) * config['G_augself']
+                    G_loss_augself += (F.mse_loss(D_out_augself[aug], augself_param[aug]) - \
+                                       F.mse_loss(D_out_augself[aug],-augself_param[aug])) * config['G_augself']
                 G_loss_augself = G_loss_augself / float(config['num_G_accumulations'])
                 G_loss = losses.generator_loss(D_fake) / float(config['num_G_accumulations'])
                 (G_loss + G_loss_augself).backward()
