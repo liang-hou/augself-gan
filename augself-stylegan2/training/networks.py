@@ -626,7 +626,6 @@ class DiscriminatorEpilogue(torch.nn.Module):
         activation          = 'lrelu',  # Activation function: 'relu', 'lrelu', etc.
         conv_clamp          = None,     # Clamp the output of convolution layers to +-X, None = disable clamping.
         augself             = '',
-        out_form            = '',
     ):
         assert architecture in ['orig', 'skip', 'resnet']
         super().__init__()
@@ -646,14 +645,8 @@ class DiscriminatorEpilogue(torch.nn.Module):
         self.conv_augself = {}
         self.fc_augself = {}
         self.out_augself = {}
-        self.out_form = out_form
         for aug in filter(None, self.augself.split(',')):
             self.out_augself[aug] = FullyConnectedLayer(in_channels, AUGMENT_DMS[aug])
-            if 'fc' in self.out_form:
-                self.fc_augself[aug] = FullyConnectedLayer(in_channels * (resolution ** 2), in_channels, activation=activation)
-            if 'conv' in self.out_form:
-                self.conv_augself[aug] = Conv2dLayer(in_channels + mbstd_num_channels, in_channels, kernel_size=3, activation=activation, conv_clamp=conv_clamp)
-                self.fc_augself[aug] = FullyConnectedLayer(in_channels * (resolution ** 2), in_channels, activation=activation)
         self.out_augself = torch.nn.ModuleDict(self.out_augself)
         self.fc_augself = torch.nn.ModuleDict(self.fc_augself)
         self.conv_augself = torch.nn.ModuleDict(self.conv_augself)
@@ -683,17 +676,11 @@ class DiscriminatorEpilogue(torch.nn.Module):
             if x_o is not None:
                 x_o = self.mbstd(x_o)
         x_augself = {}
-        if x_o is not None and 'conv' in self.out_form:
-            for aug in filter(None, self.augself.split(',')):
-                x_augself[aug] = self.out_augself[aug](self.fc_augself[aug](self.conv_augself[aug](x - x_o).flatten(1)))
         x = self.conv(x)
-        if x_o is not None and 'conv' not in self.out_form:
+        if x_o is not None:
             x_o = self.conv(x_o)
-        if x_o is not None and 'conv' not in self.out_form and 'fc' in self.out_form:
-            for aug in filter(None, self.augself.split(',')):
-                x_augself[aug] = self.out_augself[aug](self.fc_augself[aug]((x - x_o).flatten(1)))
         x = self.fc(x.flatten(1))
-        if x_o is not None and 'conv' not in self.out_form and 'fc' not in self.out_form:
+        if x_o is not None:
             x_o = self.fc(x_o.flatten(1))
             for aug in filter(None, self.augself.split(',')):
                 x_augself[aug] = self.out_augself[aug](x - x_o)
@@ -725,7 +712,6 @@ class Discriminator(torch.nn.Module):
         mapping_kwargs      = {},       # Arguments for MappingNetwork.
         epilogue_kwargs     = {},       # Arguments for DiscriminatorEpilogue.
         augself             = '',       # Augmentation-aware self-supervision.
-        out_form            = '',       # Output layer for predicting self-supervision
     ):
         super().__init__()
         self.c_dim = c_dim
@@ -755,7 +741,7 @@ class Discriminator(torch.nn.Module):
         if c_dim > 0:
             self.mapping = MappingNetwork(z_dim=0, c_dim=c_dim, w_dim=cmap_dim, num_ws=None, w_avg_beta=None, **mapping_kwargs)
         self.augself = augself
-        self.b4 = DiscriminatorEpilogue(channels_dict[4], cmap_dim=cmap_dim, resolution=4, augself=augself, out_form=out_form, **epilogue_kwargs, **common_kwargs)
+        self.b4 = DiscriminatorEpilogue(channels_dict[4], cmap_dim=cmap_dim, resolution=4, augself=augself, **epilogue_kwargs, **common_kwargs)
 
     def forward(self, img, c, img_o=None, **block_kwargs):
         x = None

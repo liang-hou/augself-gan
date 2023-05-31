@@ -70,7 +70,6 @@ def setup_training_loop_kwargs(
     augself    = None,
     d_augself  = None,
     g_augself  = None,
-    out_form   = None,
 ):
     args = dnnlib.EasyDict()
 
@@ -380,17 +379,6 @@ def setup_training_loop_kwargs(
     # ------------------------------------------------------------------
     # Augmentation-Aware Self-Supervision: augself, d_augself, g_augself
     # ------------------------------------------------------------------
-    if augself:
-        assert isinstance(augself, str)
-        desc += '-{}'.format(augself.replace(',', '+'))
-        args.D_kwargs.augself = augself
-        if out_form:
-            assert isinstance(out_form, str)
-            assert 'conv' in out_form or 'fc' in out_form or 'out' in out_form
-        else:
-            out_form = 'out'
-        desc += f'-{out_form}'
-        args.D_kwargs.out_form = out_form
     if d_augself:
         assert isinstance(d_augself, float)
         desc += f'-d{d_augself:g}'
@@ -484,7 +472,6 @@ class CommaSeparatedList(click.ParamType):
 @click.option('--augself', help='Comma-separated list of AugSelf [default: color,translation,cutout]', type=str)
 @click.option('--d_augself', help='Weight for AugSelf of D', type=float)
 @click.option('--g_augself', help='Weight for AugSelf of G', type=float)
-@click.option('--out_form', help='Output layer form for predicting AugSelf', type=str)
 
 def main(ctx, outdir, dry_run, **config_kwargs):
     """Train a GAN using the techniques described in the paper
