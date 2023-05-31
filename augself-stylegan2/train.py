@@ -379,6 +379,10 @@ def setup_training_loop_kwargs(
     # ------------------------------------------------------------------
     # Augmentation-Aware Self-Supervision: augself, d_augself, g_augself
     # ------------------------------------------------------------------
+    if augself:
+        assert isinstance(augself, str)
+        desc += '-{}'.format(augself.replace(',', '+'))
+        args.D_kwargs.augself = augself
     if d_augself:
         assert isinstance(d_augself, float)
         desc += f'-d{d_augself:g}'
