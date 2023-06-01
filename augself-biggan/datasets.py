@@ -143,6 +143,14 @@ class ImageFolder(data.Dataset):
                 self.data.append(self.transform(self.loader(path)))
                 self.labels.append(target)
 
+        if num_samples is not None:
+            np.random.seed(seed)
+            train_idx = np.random.choice(
+                len(self.data), num_samples, replace=False)
+            self.imgs = self.imgs[train_idx]
+            self.data = list(np.asarray(self.data)[train_idx])
+            self.labels = list(np.asarray(self.labels)[train_idx])
+
     def __getitem__(self, index):
         """
         Args:
