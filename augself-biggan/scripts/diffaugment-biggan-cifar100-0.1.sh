@@ -1,5 +1,5 @@
 #!/bin/bash
-python train.py --experiment_name DiffAugment-biggan-cifar100-0.1 --DiffAugment translation,cutout \
+python train.py --experiment_name diffaugment-biggan-cifar100-0.1 --DiffAugment color,translation,cutout \
 --mirror_augment --use_multiepoch_sampler \
 --which_best FID --num_inception_images 10000 \
 --shuffle --batch_size 50 --parallel \
