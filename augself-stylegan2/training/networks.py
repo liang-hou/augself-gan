@@ -15,7 +15,7 @@ from torch_utils.ops import upfirdn2d
 from torch_utils.ops import bias_act
 from torch_utils.ops import fma
 
-from DiffAugment_pytorch import AUGMENT_DMS
+from DiffAugment_pytorch import AUGMENT_DIM
 
 #----------------------------------------------------------------------------
 
@@ -646,7 +646,7 @@ class DiscriminatorEpilogue(torch.nn.Module):
         self.fc_augself = {}
         self.out_augself = {}
         for aug in filter(None, self.augself.split(',')):
-            self.out_augself[aug] = FullyConnectedLayer(in_channels, AUGMENT_DMS[aug])
+            self.out_augself[aug] = FullyConnectedLayer(in_channels, AUGMENT_DIM[aug])
         self.out_augself = torch.nn.ModuleDict(self.out_augself)
         self.fc_augself = torch.nn.ModuleDict(self.fc_augself)
         self.conv_augself = torch.nn.ModuleDict(self.conv_augself)

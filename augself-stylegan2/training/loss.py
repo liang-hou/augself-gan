@@ -23,7 +23,7 @@ class Loss:
 #----------------------------------------------------------------------------
 
 class StyleGAN2Loss(Loss):
-    def __init__(self, device, G_mapping, G_synthesis, D, diffaugment='', augment_pipe=None, style_mixing_prob=0.9, r1_gamma=10, pl_batch_shrink=2, pl_decay=0.01, pl_weight=2, D_augself=1, G_augself=1):
+    def __init__(self, device, G_mapping, G_synthesis, D, diffaugment='', brightness=1.0, saturation=1.0, contrast=1.0, translation=0.125, cutout=0.5, augment_pipe=None, style_mixing_prob=0.9, r1_gamma=10, pl_batch_shrink=2, pl_decay=0.01, pl_weight=2, D_augself=1, G_augself=1):
         super().__init__()
         self.device = device
         self.G_mapping = G_mapping
@@ -38,6 +38,13 @@ class StyleGAN2Loss(Loss):
         self.pl_weight = pl_weight
         self.pl_mean = torch.zeros([], device=device)
 
+        self.diffaugment_config = {
+            'brightness': brightness,
+            'saturation': saturation,
+            'contrast': contrast,
+            'translation': translation,
+            'cutout': cutout
+        }
         self.D_augself = D_augself
         self.G_augself = G_augself
 
@@ -56,7 +63,7 @@ class StyleGAN2Loss(Loss):
     def run_D(self, img, c, sync):
         if self.diffaugment:
             img_o = img
-            img, labels_augself = DiffAugment(img, policy=self.diffaugment)
+            img, labels_augself = DiffAugment(img, policy=self.diffaugment, config=self.diffaugment_config)
         if self.augment_pipe is not None:
             img = self.augment_pipe(img)
         with misc.ddp_sync(self.D, sync):

@@ -68,6 +68,11 @@ def setup_training_loop_kwargs(
 
     # Augmentation-Aware Self-Supervision
     augself    = None,
+    brightness = None,
+    saturation = None,
+    contrast   = None,
+    translation= None,
+    cutout     = None,
     d_augself  = None,
     g_augself  = None,
 ):
@@ -381,8 +386,23 @@ def setup_training_loop_kwargs(
     # ------------------------------------------------------------------
     if augself:
         assert isinstance(augself, str)
-        desc += '-{}'.format(augself.replace(',', '+'))
+        desc += '-{}'.format(augself.replace(',', '-'))
         args.D_kwargs.augself = augself
+    if brightness:
+        assert isinstance(brightness, float)
+        args.loss_kwargs.brightness = brightness
+    if saturation:
+        assert isinstance(saturation, float)
+        args.loss_kwargs.saturation = saturation
+    if contrast:
+        assert isinstance(contrast, float)
+        args.loss_kwargs.contrast = contrast
+    if translation:
+        assert isinstance(translation, float)
+        args.loss_kwargs.translation = translation
+    if cutout:
+        assert isinstance(cutout, float)
+        args.loss_kwargs.cutout = cutout
     if d_augself:
         assert isinstance(d_augself, float)
         desc += f'-d{d_augself:g}'
@@ -474,6 +494,11 @@ class CommaSeparatedList(click.ParamType):
 
 #
 @click.option('--augself', help='Comma-separated list of AugSelf [default: color,translation,cutout]', type=str)
+@click.option('--brightness', help='Strength for brightness of AugSelf', type=float)
+@click.option('--saturation', help='Strength for saturation of AugSelf', type=float)
+@click.option('--contrast', help='Strength for contrast of AugSelf', type=float)
+@click.option('--translation', help='Strength for translation of AugSelf', type=float)
+@click.option('--cutout', help='Strength for cutout of AugSelf', type=float)
 @click.option('--d_augself', help='Weight for AugSelf of D', type=float)
 @click.option('--g_augself', help='Weight for AugSelf of G', type=float)
 
