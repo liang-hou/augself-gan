@@ -8,8 +8,10 @@ This repo is implemented upon the [BigGAN-PyTorch repo](https://github.com/ajbro
 
 ## Training
 
-We provide a complete set of training scripts in the `scripts` folder to facilitate replicating our results. For example, the following command will run *AugSelf-BigGAN* on CIFAR-10 with 10% training data:
+We provide a complete set of training scripts in the `scripts` folder to facilitate replicating our results. For example, the following command will run *AugSelf-BigGAN(+)* on CIFAR-10 with 10% training data:
 
 ```bash
 CUDA_VISIBLE_DEVICES=0 bash scripts/augself-biggan-cifar10-0.1.sh
+
+CUDA_VISIBLE_DEVICES=0 bash scripts/augself+biggan-cifar10-0.1.sh
 ```
