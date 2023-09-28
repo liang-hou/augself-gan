@@ -1,4 +1,4 @@
-# DiffAugment for BigGAN (CIFAR)
+# AugSelf-BigGAN (CIFAR-10 and CIFAR-100)
 
 This repo is implemented upon the [BigGAN-PyTorch repo](https://github.com/ajbrock/BigGAN-PyTorch). The main dependencies are:
 
